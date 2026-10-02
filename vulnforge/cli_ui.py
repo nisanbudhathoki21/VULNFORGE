@@ -87,12 +87,24 @@ class LiveScanDashboard:
         self.status = "SCANNING"
         self.activity = "Starting authorized assessment"
         self.requests = 0
+        self.responses = 0
         self.recent_http = deque(maxlen=5)
         self.activity_log = deque(maxlen=7)
         self.endpoints = None
+        self.hosts = None
+        self.parameters = None
+        self.forms = None
+        self.api_endpoints = None
+        self.js_routes = None
         self.hypotheses = None
         self.tests = None
+        self.controls = None
+        self.differentials = None
+        self.observations = None
         self.confirmed = None
+        self.unconfirmed = None
+        self.killed = None
+        self.untestable = None
         self.latest_http = "No HTTP exchange recorded yet"
         self._started_display = False
         self.finished = False
@@ -101,6 +113,8 @@ class LiveScanDashboard:
         data = data if isinstance(data, dict) else {}
         if kind == "http-exchange":
             self.requests += 1
+            if data.get("status") not in (None, "", 0):
+                self.responses += 1
             self.recent_http.append({
                 "time": _timestamp(), "method": str(data.get("method") or "HTTP"),
                 "path": _safe_path(data.get("url", "")),
@@ -138,12 +152,30 @@ class LiveScanDashboard:
         self.activity_log.append((_timestamp(), tag, message))
 
     def finish(self, context) -> None:
+        from collections import Counter
         self.status = "STOPPED" if getattr(context, "stop_reason", "") else "COMPLETE"
-        self.requests = int(getattr(getattr(context, "stats", None), "requests_sent", self.requests))
+        stats = getattr(context, "stats", None)
+        self.requests = int(getattr(stats, "requests_sent", self.requests))
+        self.responses = sum(1 for exchange in getattr(getattr(context, "requester", None), "exchanges", []) if getattr(exchange, "status", 0)) or min(self.requests, self.responses)
+        asset_nodes = list(getattr(context, "asset_nodes", []))
+        self.hosts = len({getattr(node, "value", "") for node in asset_nodes if getattr(node, "asset_type", "") in {"host", "hostname", "domain", "ip", "ip-address"} and getattr(node, "value", "")}) or 1
         self.endpoints = len(getattr(context, "endpoints", {}))
+        self.parameters = len(getattr(context, "parameters", {}))
+        endpoints = list(getattr(context, "endpoints", {}).values())
+        self.forms = sum(1 for endpoint in endpoints if getattr(endpoint, "source", "") == "form")
+        self.api_endpoints = sum(1 for endpoint in endpoints if getattr(endpoint, "source", "") in {"api", "api-schema", "openapi"} or "/api/" in getattr(endpoint, "path", ""))
+        self.js_routes = sum(1 for endpoint in endpoints if "javascript" in getattr(endpoint, "source", "").lower() or "js" in getattr(endpoint, "source", "").lower())
         self.hypotheses = len(getattr(context, "hypotheses", []))
         self.tests = len(getattr(context, "tests", []))
-        self.confirmed = sum(1 for finding in getattr(context, "findings", []) if getattr(finding, "status", "") == "VERIFIED")
+        test_docs = getattr(context, "tests", [])
+        self.controls = sum(1 for test in test_docs if isinstance(test, dict) and any("control" in str(key).lower() for key in test))
+        self.differentials = sum(1 for test in test_docs if isinstance(test, dict) and any("diff" in str(key).lower() for key in test))
+        findings = list(getattr(context, "findings", []))
+        self.observations = sum(1 for finding in findings if getattr(finding, "status", "") not in {"VERIFIED", "REPRODUCED"})
+        self.confirmed = sum(1 for finding in findings if getattr(finding, "status", "") == "VERIFIED")
+        self.unconfirmed = sum(1 for finding in findings if getattr(finding, "status", "") in {"CANDIDATE", "OBSERVED", "SIGNAL", "REPRODUCED"})
+        self.killed = sum(1 for finding in findings if getattr(finding, "status", "") == "KILLED")
+        self.untestable = sum(1 for test in test_docs if isinstance(test, dict) and str(test.get("status", "")).upper() in {"BLOCKED", "UNTESTABLE", "SKIPPED"})
         self.activity = "Scan finished; records saved"
         self.finished = True
         if self.tty:
@@ -167,7 +199,17 @@ class LiveScanDashboard:
         out.append(f"TARGET  {self.target}")
         out.append(f"STATUS  {self.status}   ELAPSED  {elapsed // 60:02d}:{elapsed % 60:02d}   HTTP EXCHANGES  {self.requests}")
         if self.endpoints is not None:
-            out.append(f"ASSETS  endpoints {self.endpoints}   hypotheses {self.hypotheses}   tests {self.tests}   confirmed {self.confirmed}")
+            out.extend([
+                "DISCOVERY",
+                f"  Hosts       {self.hosts}   Endpoints {self.endpoints}   Parameters {self.parameters}   Forms {self.forms}",
+                f"  API routes  {self.api_endpoints}   JavaScript routes {self.js_routes}",
+                "HTTP TRAFFIC",
+                f"  Requests sent {self.requests}   Responses received {self.responses}",
+                "TESTING",
+                f"  Observations {self.observations}   Hypotheses {self.hypotheses}   Tests {self.tests}   Controls {self.controls}   Differentials {self.differentials}",
+                "VALIDATION",
+                f"  Confirmed {self.confirmed}   Unconfirmed {self.unconfirmed}   Killed {self.killed}   Untestable {self.untestable}",
+            ])
         out.append("")
         out.append("CURRENT ACTIVITY")
         out.append("  " + self.activity)

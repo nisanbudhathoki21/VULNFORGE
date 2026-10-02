@@ -15,6 +15,15 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .redaction import REDACTED, redact_any, redact_url_query_values
+from .relational import (
+    ensure_relational_schema,
+    link_test_records,
+    materialize_exchange,
+    migration_status,
+    record_audit_event,
+    record_migration,
+    stable_id,
+)
 
 
 def _redact_sensitive_urls(value, field=""):
@@ -181,15 +190,37 @@ class Store:
             # All schema changes are additive CREATE TABLE/INDEX operations; historical rows are untouched.
             # Existing scan rows and historical report documents are not rewritten.
             con.executescript(_SCHEMA)
+            # Keep the legacy pragma at version 3 for compatibility with the
+            # original store while recording the named additive migration in a
+            # durable ledger.  This gives `vulnforge db migrate` a real,
+            # idempotent migration surface without rewriting old databases.
+            ensure_relational_schema(con)
+            record_migration(con)
             if version<SCHEMA_VERSION:
                 con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     # ------------------------------------------------------------------
     def start_scan_record(self, scan_id: str, target: str, profile: str, started_at: float) -> None:
-        """Create a durable RUNNING row so HTTP exchanges can be browsed live."""
+        """Create a durable RUNNING row and its project/target relationship."""
+        from urllib.parse import urlsplit
+        clean_target = redact_any(target)
+        parsed = urlsplit(str(target))
+        project_id = "project-default"
+        target_id = stable_id("target", str(target).lower().rstrip("/"))
+        scope_id = stable_id("scope", scan_id)
         with self._conn() as con:
             con.execute("INSERT OR REPLACE INTO scans(scan_id,target,profile,started_at,finished_at,status,stats_json,scope_json,audit_json) VALUES (?,?,?,?,?,?,?,?,?)",
-                (scan_id,redact_any(target),profile,started_at,None,"running","{}","{}","{}"))
+                (scan_id,clean_target,profile,started_at,None,"running","{}","{}","{}"))
+            con.execute("INSERT INTO projects(project_id,name,description,created_at,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET updated_at=excluded.updated_at",
+                        (project_id,"Default project","Canonical VulnForge workspace",started_at,started_at))
+            con.execute("INSERT INTO targets(target_id,project_id,canonical_url,scheme,host,port,created_at,last_seen) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET last_seen=excluded.last_seen",
+                        (target_id,project_id,clean_target,parsed.scheme or "",parsed.hostname or "",parsed.port or (443 if parsed.scheme == "https" else 80),started_at,started_at))
+            con.execute("INSERT OR REPLACE INTO scopes(scope_id,target_id,confirmed,policy_json,created_at) VALUES (?,?,?,?,?)",
+                        (scope_id,target_id,0,"{}",started_at))
+            con.execute("INSERT OR REPLACE INTO scan_targets(scan_id,target_id,scope_id) VALUES (?,?,?)", (scan_id,target_id,scope_id))
+            con.execute("INSERT OR REPLACE INTO scan_runs(scan_id,project_id,target_id,profile,status,started_at,finished_at,statistics_json) VALUES (?,?,?,?,?,?,?,?)", (scan_id,project_id,target_id,profile,"running",started_at,None,"{}"))
+            record_audit_event(con, action="scan_started", object_type="scan", object_id=scan_id, scan_id=scan_id,
+                               metadata={"target_id": target_id, "profile": profile})
 
     def record_exchange(self, scan_id: str, exchange: Dict[str, Any], sensitive_headers=None,
                         redact: bool = True) -> None:
@@ -241,9 +272,15 @@ class Store:
         stored_url=redact_any(doc.get("url","")) if redact else doc.get("url","")
         redirect_data=redact_any(doc.get("redirect_chain",[])) if redact else doc.get("redirect_chain",[])
         with self._conn() as con:
-            con.execute("INSERT INTO exchanges(exchange_id,scan_id,method,url,status,module,redirect_json,data_json) VALUES (?,?,?,?,?,?,?,?)",
+            con.execute("INSERT OR REPLACE INTO exchanges(exchange_id,scan_id,method,url,status,module,redirect_json,data_json) VALUES (?,?,?,?,?,?,?,?)",
                 (exchange_id,scan_id,doc.get("method","GET"),stored_url,doc.get("status",0),
                  doc.get("module",""),json.dumps(redirect_data),json.dumps(doc)))
+            # The JSON exchange remains the compatibility projection; the
+            # normalized request/response rows are the workbench source for
+            # filtering, joins, and CLI detail views.
+            materialize_exchange(con, scan_id, doc)
+            record_audit_event(con, action="request_sent", object_type="exchange", object_id=exchange_id,
+                               scan_id=scan_id, metadata={"request_id": doc.get("request_id"), "response_id": doc.get("response_id"), "module": doc.get("module", "")})
 
     def record_event(self, scan_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
         """Persist one real engine event for resumable live/history views.
@@ -294,6 +331,8 @@ class Store:
         with self._conn() as con:
             con.execute("UPDATE scans SET status=?,finished_at=? WHERE scan_id=?",
                         (status,finished_at,scan_id))
+            con.execute("UPDATE scan_runs SET status=?,finished_at=? WHERE scan_id=?", (status,finished_at,scan_id))
+            record_audit_event(con, action="scan_finished", object_type="scan", object_id=scan_id, scan_id=scan_id, metadata={"status": status})
 
     # ------------------------------------------------------------------
     def save_scan(self, scan) -> None:
@@ -302,6 +341,13 @@ class Store:
         from ..report.json_report import build_report_dict
         report_doc = build_report_dict(scan)
         with self._conn() as con:
+            # Remove only this scan's replaceable projections. Audit events are
+            # intentionally retained as the durable activity trail.
+            for table in ("controls", "diffs", "test_runs"):
+                con.execute(f"DELETE FROM {table} WHERE scan_id=?", (ctx.scan_id,))
+            con.execute("DELETE FROM payloads WHERE test_id IN (SELECT test_id FROM tests WHERE scan_id=?)", (ctx.scan_id,))
+            con.execute("DELETE FROM responses WHERE scan_id=?", (ctx.scan_id,))
+            con.execute("DELETE FROM requests WHERE scan_id=?", (ctx.scan_id,))
             for table in ("endpoints", "parameters", "technologies", "findings", "hypotheses", "exchanges", "dns_observations", "tests", "evidence", "phases", "asset_nodes", "asset_edges", "actors", "resources", "security_properties", "test_plans", "application_models"):
                 con.execute(f"DELETE FROM {table} WHERE scan_id=?", (ctx.scan_id,))
             con.execute("DELETE FROM scan_documents WHERE scan_id=?", (ctx.scan_id,))
@@ -317,17 +363,40 @@ class Store:
                  json.dumps(ctx.stats.to_dict()),
                  json.dumps(redact_any(ctx.authorization.describe())),
                  json.dumps(redact_any(ctx.authorization.audit_dump()))))
+            target_id = stable_id("target", str(ctx.config.target).lower().rstrip("/"))
+            parsed_target = __import__("urllib.parse", fromlist=["urlsplit"]).urlsplit(str(ctx.config.target))
+            now = time.time()
+            con.execute("INSERT INTO projects(project_id,name,description,created_at,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET updated_at=excluded.updated_at", ("project-default", "Default project", "Canonical VulnForge workspace", now, now))
+            con.execute("INSERT INTO targets(target_id,project_id,canonical_url,scheme,host,port,created_at,last_seen) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET last_seen=excluded.last_seen", (target_id, "project-default", redact_any(ctx.config.target), parsed_target.scheme or "", parsed_target.hostname or "", parsed_target.port or (443 if parsed_target.scheme == "https" else 80), now, now))
+            scope_id = stable_id("scope", ctx.scan_id)
+            con.execute("INSERT OR REPLACE INTO scopes(scope_id,target_id,confirmed,policy_json,created_at) VALUES (?,?,?,?,?)", (scope_id, target_id, 1 if getattr(ctx.authorization, "confirmed", False) else 0, json.dumps(redact_any(ctx.authorization.describe())), now))
+            con.execute("INSERT OR REPLACE INTO scan_targets(scan_id,target_id,scope_id) VALUES (?,?,?)", (ctx.scan_id, target_id, scope_id))
+            hostname = parsed_target.hostname or ""
+            if hostname:
+                host_id = stable_id("host", f"{ctx.scan_id}:{hostname}")
+                con.execute("INSERT OR REPLACE INTO hosts(host_id,target_id,scan_id,hostname,ip_address,source,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?)", (host_id, target_id, ctx.scan_id, hostname, None, "target", now, now))
+                con.execute("INSERT OR REPLACE INTO ports(port_id,host_id,port,scheme,service,source) VALUES (?,?,?,?,?,?)", (stable_id("port", f"{host_id}:{parsed_target.port or (443 if parsed_target.scheme == 'https' else 80)}"), host_id, parsed_target.port or (443 if parsed_target.scheme == "https" else 80), parsed_target.scheme, "https" if parsed_target.scheme == "https" else "http", "target"))
+            final_status = "aborted" if scan.aborted else ("partial" if ctx.stop_reason else "completed")
+            con.execute("INSERT OR REPLACE INTO scan_runs(scan_id,project_id,target_id,profile,status,started_at,finished_at,statistics_json) VALUES (?,?,?,?,?,?,?,?)", (ctx.scan_id, "project-default", target_id, ctx.config.profile_name, final_status, ctx.stats.started_at, ctx.stats.finished_at, json.dumps(ctx.stats.to_dict())))
+            endpoint_ids = {}
             for ep in ctx.endpoints.values():
+                endpoint_id = stable_id("endpoint", f"{ctx.scan_id}:{ep.method}:{ep.normalized}")
+                endpoint_ids[ep.key()] = endpoint_id
+                ep_doc = redact_any(ep.to_dict())
+                ep_doc["endpoint_id"] = endpoint_id
                 con.execute(
-                    "INSERT INTO endpoints (scan_id,method,url,normalized,path,status,source,state_changing,auth_hint,content_type,data_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                    (ctx.scan_id, ep.method, redact_any(ep.url), redact_any(ep.normalized), redact_any(ep.path), ep.status,
-                     ep.source, int(ep.state_changing), ep.auth_hint, ep.content_type,
-                     json.dumps(redact_any(ep.to_dict()))))
+                    "INSERT INTO endpoints (scan_id,endpoint_id,target_id,method,url,normalized,path,status,source,state_changing,auth_hint,content_type,first_seen,last_seen,data_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (ctx.scan_id, endpoint_id, target_id, ep.method, redact_any(ep.url), redact_any(ep.normalized), redact_any(ep.path), ep.status,
+                     ep.source, int(ep.state_changing), ep.auth_hint, ep.content_type, ep.discovered_at or now, now,
+                     json.dumps(ep_doc)))
             for p in ctx.parameters.values():
+                endpoint_id = endpoint_ids.get(f"{p.method}:{p.endpoint_url}")
+                parameter_id = stable_id("parameter", f"{ctx.scan_id}:{p.key()}")
+                values = [p.example] if p.example else []
                 con.execute(
-                    "INSERT INTO parameters (scan_id,endpoint,method,name,location,type_hint,classifications,source,example) VALUES (?,?,?,?,?,?,?,?,?)",
-                    (ctx.scan_id, redact_any(p.endpoint_url), p.method, p.name, p.location,
-                     p.type_hint, json.dumps(redact_any(p.classifications)), p.source, redact_any(p.example)))
+                    "INSERT INTO parameters (scan_id,parameter_id,endpoint_id,endpoint,method,name,location,type_hint,classifications,source,example,observed_values,first_seen,last_seen,test_count,finding_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (ctx.scan_id, parameter_id, endpoint_id, redact_any(p.endpoint_url), p.method, p.name, p.location,
+                     p.type_hint, json.dumps(redact_any(p.classifications)), p.source, redact_any(p.example), json.dumps(redact_any(values)), now, now, 0, 0))
             for t in ctx.technologies.values():
                 con.execute(
                     "INSERT INTO technologies (scan_id,name,category,confidence,signals) VALUES (?,?,?,?,?)",
@@ -422,17 +491,174 @@ class Store:
                 exchange_doc["sensitive_values_stored"]=not should_redact
                 stored_url=(redact_url_query_values(ex.url) if force_sensitive_redaction else redact_any(ex.url)) if should_redact else ex.url
                 redirects=(_redact_sensitive_urls(ex.redirect_chain) if force_sensitive_redaction else redact_any(ex.redirect_chain)) if should_redact else ex.redirect_chain
-                con.execute("INSERT INTO exchanges(exchange_id,scan_id,method,url,status,module,redirect_json,data_json) VALUES (?,?,?,?,?,?,?,?)",
+                con.execute("INSERT OR REPLACE INTO exchanges(exchange_id,scan_id,method,url,status,module,redirect_json,data_json) VALUES (?,?,?,?,?,?,?,?)",
                     (ex.exchange_id, ctx.scan_id, ex.method, stored_url, ex.status, ex.module,
                      json.dumps(redirects), json.dumps(exchange_doc)))
+                materialize_exchange(con, ctx.scan_id, exchange_doc, target_id=target_id)
+            # Link test, payload, control, and differential records to the
+            # normalized request/response IDs after every exchange is present.
+            link_test_records(con, ctx.scan_id, getattr(ctx, "tests", []))
+            # Evidence rows keep direct traversal columns in addition to their
+            # redacted JSON description: finding -> evidence -> test run ->
+            # exact request/response/diff.
+            evidence_rows = con.execute("SELECT evidence_id,test_id,data_json FROM evidence WHERE scan_id=?", (ctx.scan_id,)).fetchall()
+            for evidence_row in evidence_rows:
+                test_run = con.execute("SELECT baseline_request_id,baseline_response_id,test_request_id,test_response_id FROM test_runs WHERE test_id=? AND scan_id=?", (evidence_row["test_id"], ctx.scan_id)).fetchone() if evidence_row["test_id"] else None
+                if test_run:
+                    diff_row = con.execute("SELECT diff_id FROM diffs WHERE test_run_id=? LIMIT 1", (stable_id("testrun", f"{ctx.scan_id}:{evidence_row['test_id']}"),)).fetchone()
+                    con.execute("UPDATE evidence SET request_id=?,response_id=?,diff_id=? WHERE evidence_id=?", (test_run["test_request_id"] or test_run["baseline_request_id"], test_run["test_response_id"] or test_run["baseline_response_id"], diff_row[0] if diff_row else None, evidence_row["evidence_id"]))
             intel = getattr(ctx, "intelligence", {})
             dns = intel.get("dns", {})
+            observed_hostname = dns.get("hostname") or parsed_target.hostname or ""
             for typ in ("A", "AAAA"):
                 for val in dns.get(typ, []):
                     con.execute("INSERT INTO dns_observations(scan_id,hostname,record_type,value,source) VALUES (?,?,?,?,?)",
-                                (ctx.scan_id, dns.get("hostname", ""), typ, val, "system resolver"))
+                                (ctx.scan_id, observed_hostname, typ, val, "system resolver"))
+                    host_id = stable_id("host", f"{ctx.scan_id}:{observed_hostname}:{val}")
+                    con.execute("INSERT OR REPLACE INTO hosts(host_id,target_id,scan_id,hostname,ip_address,source,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?)", (host_id, target_id, ctx.scan_id, observed_hostname, val, "dns", now, now))
             con.execute("INSERT INTO scan_documents(scan_id,report_json) VALUES (?,?)",
                         (ctx.scan_id, json.dumps(redact_any(report_doc))))
+            for fmt, report_path in (getattr(scan, "report_paths", {}) or {}).items():
+                report_id = stable_id("report", f"{ctx.scan_id}:{fmt}")
+                con.execute("INSERT OR REPLACE INTO reports(report_id,scan_id,format,path,generated_at,redacted,metadata_json) VALUES (?,?,?,?,?,?,?)",
+                            (report_id, ctx.scan_id, fmt, str(report_path), time.time(), 1, "{}"))
+            record_audit_event(con, action="scan_persisted", object_type="scan", object_id=ctx.scan_id,
+                               scan_id=ctx.scan_id, metadata={"endpoints": len(ctx.endpoints), "requests": getattr(ctx.stats, "requests_sent", 0), "findings": len(ctx.findings)})
+
+    # ------------------------------------------------------------------
+    def relational_metrics(self) -> Dict[str, int]:
+        """Return actual row counts from the normalized workspace tables."""
+        tables = ("projects", "targets", "scopes", "scan_runs", "hosts", "ports", "endpoints", "parameters", "requests", "responses", "tests", "test_runs", "payloads", "controls", "diffs", "evidence", "findings", "tool_observations", "browser_events", "audit_events")
+        with self._conn() as con:
+            return {table: int(con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]) for table in tables}
+
+    def database_status(self) -> Dict[str, Any]:
+        with self._conn() as con:
+            version = int(con.execute("PRAGMA user_version").fetchone()[0])
+            migration = migration_status(con)
+            journal = con.execute("PRAGMA journal_mode").fetchone()[0]
+        return {"engine": "SQLite", "path": self.path, "schema_version": version,
+                "journal_mode": journal, "migration": migration, "counts": self.relational_metrics()}
+
+    def migrate(self) -> Dict[str, Any]:
+        """Re-run the additive migration safely and return its status."""
+        with self._conn() as con:
+            ensure_relational_schema(con)
+            record_migration(con)
+            record_audit_event(con, action="database_migrated", object_type="database", object_id=self.path)
+            return migration_status(con)
+
+    def backup(self, destination: str) -> str:
+        """Create a consistent SQLite backup, including WAL state, safely."""
+        import pathlib
+        destination_path = pathlib.Path(destination).expanduser()
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        # sqlite backup() works while the database is open and is safer than a
+        # byte-for-byte copy when WAL journaling is active.
+        source = self._conn()
+        try:
+            target = sqlite3.connect(str(destination_path))
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+        finally:
+            source.close()
+        return str(destination_path)
+
+    def resolve_exchange(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """Resolve an exchange ID, request/response ID, numeric DB row, or 1-based display index."""
+        value = str(identifier or "").strip()
+        if not value:
+            return None
+        exact = self.get_exchange(value)
+        if exact:
+            return exact
+        with self._conn() as con:
+            if value.isdigit():
+                row = con.execute("SELECT data_json FROM exchanges WHERE id=?", (int(value),)).fetchone()
+                if row:
+                    try: return json.loads(row["data_json"] or "{}")
+                    except (ValueError, TypeError): return None
+                rows = con.execute("SELECT data_json FROM exchanges ORDER BY id DESC LIMIT 1 OFFSET ?", (max(0, int(value) - 1),)).fetchall()
+                if rows:
+                    try: return json.loads(rows[0]["data_json"] or "{}")
+                    except (ValueError, TypeError): return None
+            row = con.execute("SELECT data_json FROM exchanges WHERE json_extract(data_json,'$.request_id')=? OR json_extract(data_json,'$.response_id')=? ORDER BY id DESC LIMIT 1", (value, value)).fetchone()
+            if row:
+                try: return json.loads(row["data_json"] or "{}")
+                except (ValueError, TypeError): return None
+        return None
+
+    def get_request(self, request_id: str) -> Optional[Dict[str, Any]]:
+        with self._conn() as con:
+            row = con.execute("SELECT * FROM requests WHERE request_id=? OR exchange_id=? LIMIT 1", (str(request_id), str(request_id))).fetchone()
+            if not row: return None
+            item = dict(row)
+            headers = con.execute("SELECT name,value FROM request_headers WHERE request_id=? ORDER BY position", (row["request_id"],)).fetchall()
+            params = con.execute("SELECT name,location,value,redacted FROM request_parameters WHERE request_id=? ORDER BY id", (row["request_id"],)).fetchall()
+        item["headers"] = [dict(x) for x in headers]
+        item["parameters"] = [dict(x) for x in params]
+        return item
+
+    def get_response(self, response_id: str) -> Optional[Dict[str, Any]]:
+        with self._conn() as con:
+            row = con.execute("SELECT * FROM responses WHERE response_id=? OR request_id=? LIMIT 1", (str(response_id), str(response_id))).fetchone()
+            if not row: return None
+            item = dict(row)
+            headers = con.execute("SELECT name,value FROM response_headers WHERE response_id=? ORDER BY position", (row["response_id"],)).fetchall()
+            cookies = con.execute("SELECT cookie_name,cookie_value,attributes_json FROM response_cookies WHERE response_id=? ORDER BY id", (row["response_id"],)).fetchall()
+        item["headers"] = [dict(x) for x in headers]
+        item["cookies"] = [dict(x) for x in cookies]
+        return item
+
+    def get_endpoint_detail(self, identifier: str) -> Optional[Dict[str, Any]]:
+        value = str(identifier or "").strip()
+        with self._conn() as con:
+            row = None
+            if value.isdigit():
+                row = con.execute("SELECT * FROM endpoints WHERE id=?", (int(value),)).fetchone()
+            if row is None:
+                row = con.execute("SELECT * FROM endpoints WHERE endpoint_id=?", (value,)).fetchone()
+            if row is None and value:
+                row = con.execute("SELECT * FROM endpoints WHERE url LIKE ? OR path LIKE ? ORDER BY id DESC LIMIT 1", (f"%{value}%", f"%{value}%")).fetchone()
+            if row is None: return None
+            item = dict(row)
+            endpoint_id = item.get("endpoint_id")
+            requests = con.execute("SELECT request_id,exchange_id,method,host,path,query,source,timestamp FROM requests WHERE endpoint_id=? ORDER BY timestamp DESC", (endpoint_id,)).fetchall() if endpoint_id else []
+            tests = con.execute("SELECT test_run_id,test_id,status FROM test_runs WHERE scan_id=? AND (result_json LIKE ? OR result_json LIKE ?) ORDER BY rowid DESC", (item.get("scan_id"), f"%{item.get('path','')}%", f"%{item.get('url','')}%" )).fetchall()
+            findings = con.execute("SELECT finding_id,title,status,severity FROM findings WHERE scan_id=? AND endpoint LIKE ?", (item.get("scan_id"), f"%{item.get('path','')}%" )).fetchall()
+            parameter_count = con.execute("SELECT COUNT(*) FROM parameters WHERE scan_id=? AND endpoint_id=?", (item.get("scan_id"), endpoint_id)).fetchone()[0] if endpoint_id else 0
+        from urllib.parse import urlsplit
+        item["host"] = urlsplit(str(item.get("url") or "")).hostname or "Not recorded"
+        item["requests"] = [dict(x) for x in requests]
+        item["tests"] = [dict(x) for x in tests]
+        item["findings"] = [dict(x) for x in findings]
+        item["parameter_count"] = int(parameter_count)
+        item["request_count"] = len(item["requests"])
+        item["test_count"] = len(item["tests"])
+        item["finding_count"] = len(item["findings"])
+        return item
+
+    def global_search(self, query: str, limit: int = 50) -> Dict[str, List[Dict[str, Any]]]:
+        """Search normalized and compatibility records without exposing secrets."""
+        q = f"%{str(query or '').strip().lower()}%"
+        limit = max(1, min(int(limit), 200))
+        out: Dict[str, List[Dict[str, Any]]] = {"endpoints": [], "requests": [], "responses": [], "parameters": [], "payloads": [], "findings": [], "evidence": [], "hosts": []}
+        with self._conn() as con:
+            out["endpoints"] = [dict(r) for r in con.execute("SELECT endpoint_id,scan_id,method,url,path,status FROM endpoints WHERE lower(url) LIKE ? OR lower(path) LIKE ? LIMIT ?", (q, q, limit))]
+            out["requests"] = [dict(r) for r in con.execute("SELECT request_id,exchange_id,scan_id,method,host,path,source,timestamp FROM requests WHERE lower(path) LIKE ? OR lower(host) LIKE ? OR lower(body) LIKE ? LIMIT ?", (q, q, q, limit))]
+            out["responses"] = [dict(r) for r in con.execute("SELECT response_id,request_id,scan_id,status_code,content_type,body_hash FROM responses WHERE lower(body) LIKE ? OR lower(content_type) LIKE ? LIMIT ?", (q, q, limit))]
+            out["parameters"] = [dict(r) for r in con.execute("SELECT parameter_id,scan_id,name,location,endpoint FROM parameters WHERE lower(name) LIKE ? OR lower(endpoint) LIKE ? LIMIT ?", (q, q, limit))]
+            out["payloads"] = [dict(r) for r in con.execute("SELECT payload_id,test_id,payload_type,payload FROM payloads WHERE lower(payload) LIKE ? OR lower(payload_type) LIKE ? LIMIT ?", (q, q, limit))]
+            out["findings"] = [dict(r) for r in con.execute("SELECT finding_id,scan_id,title,severity,status,endpoint FROM findings WHERE lower(title) LIKE ? OR lower(endpoint) LIKE ? OR lower(category) LIKE ? LIMIT ?", (q, q, q, limit))]
+            out["evidence"] = [dict(r) for r in con.execute("SELECT evidence_id,scan_id,finding_id,test_id,request_id,response_id FROM evidence WHERE lower(data_json) LIKE ? LIMIT ?", (q, limit))]
+            out["hosts"] = [dict(r) for r in con.execute("SELECT host_id,scan_id,hostname,ip_address,source FROM hosts WHERE lower(hostname) LIKE ? OR lower(ip_address) LIKE ? LIMIT ?", (q, q, limit))]
+        return out
+
+    def record_audit(self, action: str, object_type: str = "", object_id: str = "", scan_id: str = "", result: str = "recorded", metadata: Any = None) -> int:
+        with self._conn() as con:
+            return record_audit_event(con, action=action, object_type=object_type, object_id=object_id, scan_id=scan_id, result=result, metadata=metadata)
 
     # ------------------------------------------------------------------
     def list_scans(self) -> List[Dict[str, Any]]:
@@ -462,7 +688,7 @@ class Store:
         if search: clauses.append("lower(e.url) LIKE ?"); values.append("%"+search.lower()+"%")
         where=(" WHERE "+" AND ".join(clauses)) if clauses else ""
         with self._conn() as con:
-            rows=con.execute("SELECT e.scan_id,s.target,e.method,e.url,e.path,e.status,e.source,e.state_changing,e.auth_hint,e.content_type FROM endpoints e JOIN scans s ON s.scan_id=e.scan_id"+where+" ORDER BY e.id DESC LIMIT ? OFFSET ?",values+[max(1,min(int(limit),1000)),max(0,int(offset))]).fetchall()
+            rows=con.execute("SELECT e.id,e.endpoint_id,e.scan_id,s.target,e.method,e.url,e.path,e.status,e.source,e.state_changing,e.auth_hint,e.content_type FROM endpoints e JOIN scans s ON s.scan_id=e.scan_id"+where+" ORDER BY e.id DESC LIMIT ? OFFSET ?",values+[max(1,min(int(limit),1000)),max(0,int(offset))]).fetchall()
         return [dict(row) for row in rows]
 
     def list_technologies(self, scan_id: str = "", search: str = "", limit: int = 500, offset: int = 0) -> List[Dict[str, Any]]:
@@ -630,8 +856,14 @@ class Store:
         return {"capture_import":item,"workflow_observations":workflow}
 
     def get_evidence_chain(self, finding_id: str) -> List[Dict[str, Any]]:
+        resolved = str(finding_id or "")
         with self._conn() as con:
-            rows = con.execute("SELECT evidence_id,test_id,data_json FROM evidence WHERE finding_id=?", (finding_id,)).fetchall()
+            rows = con.execute("SELECT evidence_id,test_id,data_json FROM evidence WHERE finding_id=?", (resolved,)).fetchall()
+            if not rows and resolved.isdigit():
+                match = con.execute("SELECT finding_id FROM findings WHERE id=?", (int(resolved),)).fetchone()
+                if match:
+                    resolved = str(match[0])
+                    rows = con.execute("SELECT evidence_id,test_id,data_json FROM evidence WHERE finding_id=?", (resolved,)).fetchall()
         out=[]
         for row in rows:
             item={"evidence_id":row["evidence_id"],"test_id":row["test_id"],"evidence":json.loads(row["data_json"])}
@@ -641,9 +873,21 @@ class Store:
                 item["test"]=json.loads(test["data_json"]) if test else None
                 if test:
                     td=item["test"]
-                    exchange_ids=[td.get("baseline_exchange_id"),td.get("cross_account_exchange_id"),td.get("repeat_exchange_id")]
+                    exchange_ids=[]
+                    def collect_exchange_ids(value):
+                        if isinstance(value, dict):
+                            for key, child in value.items():
+                                if str(key).endswith("exchange_id") and child:
+                                    exchange_ids.append(str(child))
+                                elif str(key) == "exchange_ids" and isinstance(child, list):
+                                    exchange_ids.extend(str(x) for x in child if x)
+                                elif isinstance(child, (dict, list)):
+                                    collect_exchange_ids(child)
+                        elif isinstance(value, list):
+                            for child in value: collect_exchange_ids(child)
+                    collect_exchange_ids(td)
                     item["exchanges"]=[]
-                    for exchange_id in filter(None,exchange_ids):
+                    for exchange_id in dict.fromkeys(exchange_ids):
                         with self._conn() as con:
                             ex=con.execute("SELECT data_json FROM exchanges WHERE exchange_id=?",(exchange_id,)).fetchone()
                         if ex: item["exchanges"].append(json.loads(ex["data_json"]))
@@ -688,8 +932,15 @@ class Store:
         return out
 
     def get_exchange(self, exchange_id: str) -> Optional[Dict[str, Any]]:
+        value = str(exchange_id or "").strip()
         with self._conn() as con:
-            row=con.execute("SELECT scan_id,data_json FROM exchanges WHERE exchange_id=? ORDER BY id DESC LIMIT 1",(exchange_id,)).fetchone()
+            row=con.execute("SELECT scan_id,data_json FROM exchanges WHERE exchange_id=? ORDER BY id DESC LIMIT 1",(value,)).fetchone()
+            if row is None and value.isdigit():
+                row=con.execute("SELECT scan_id,data_json FROM exchanges WHERE id=?",(int(value),)).fetchone()
+                if row is None:
+                    row=con.execute("SELECT scan_id,data_json FROM exchanges ORDER BY id DESC LIMIT 1 OFFSET ?",(max(0,int(value)-1),)).fetchone()
+            if row is None:
+                row=con.execute("SELECT scan_id,data_json FROM exchanges WHERE json_extract(data_json,'$.request_id')=? OR json_extract(data_json,'$.response_id')=? ORDER BY id DESC LIMIT 1",(value,value)).fetchone()
         if not row: return None
         try:
             data=json.loads(row["data_json"] or "{}")
@@ -700,9 +951,15 @@ class Store:
         except (ValueError,TypeError): return None
 
     def get_finding(self, finding_id: str) -> Optional[Dict[str, Any]]:
+        value = str(finding_id or "").strip()
         with self._conn() as con:
-            row = con.execute("SELECT data_json FROM findings WHERE finding_id=?", (finding_id,)).fetchone()
-        return self._normalize_finding_status(json.loads(row["data_json"])) if row else None
+            row = con.execute("SELECT finding_id,data_json FROM findings WHERE finding_id=?", (value,)).fetchone()
+            if row is None and value.isdigit():
+                row = con.execute("SELECT finding_id,data_json FROM findings WHERE id=?", (int(value),)).fetchone()
+        if not row: return None
+        doc = self._normalize_finding_status(json.loads(row["data_json"]))
+        doc.setdefault("finding_id", row["finding_id"])
+        return doc
 
     def get_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
         with self._conn() as con:

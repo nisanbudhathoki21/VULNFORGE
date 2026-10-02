@@ -55,4 +55,28 @@ Labs use fake accounts and in-memory records; the scanner's LAB mode rejects non
 - Reports are redacted and versioned. JSON, HTML, Markdown, and PDF are supported; PDF generation does not require ReportLab.
 - CORS and SQL checks are observation-only. Only configured BOLA and paired redirect checks can currently emit verified findings.
 
+## HTTP traffic, traceability, and database
+
+All of these commands use the same SQLite store as the dashboard:
+
+```bash
+vulnforge requests --method GET --status 200 --host api.example.com --endpoint /api
+vulnforge traffic --finding CONFIRMED
+vulnforge request 004                 # request plus response detail
+vulnforge finding 12                  # finding → evidence → test → HTTP chain
+vulnforge endpoint 184                # endpoint history and linked findings
+vulnforge search "id=123"
+vulnforge export traffic SCAN_ID --format har
+vulnforge db status
+vulnforge db migrate
+vulnforge db backup /safe/path/vulnforge.backup.sqlite
+```
+
+`db migrate` is additive and idempotent. The named migration ledger covers the
+canonical scan tables, normalized request/response traffic, test controls and
+differentials, evidence, findings, and authentication/project relationships.
+Numeric request and endpoint IDs are display/database row aliases; exact
+stable IDs remain available in JSON output. Sensitive headers, cookies, query
+values, and body fields are redacted in normal display and exports.
+
 Run `vulnforge scan --help` for the complete option list.

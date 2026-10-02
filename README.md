@@ -101,6 +101,38 @@ docs/                    architecture, evidence, security, audit, and coverage r
 
 There is no second scanner implementation or legacy database layer in the runtime. Retained historical database files are not modified; they are not read as active scan history. `server.py`, if used directly for backwards compatibility, is only a thin launcher for the canonical dashboard.
 
+## HTTP workbench and normalized research workspace
+
+The CLI and dashboard read the same SQLite database. Every captured exchange is
+kept as a redacted compatibility record and projected into relational
+`requests`, `request_headers`, `request_parameters`, `responses`,
+`response_headers`, and `response_cookies` rows. Test materialization adds
+`payloads`, `test_runs`, `controls`, `diffs`, and direct evidence links, so a
+finding can be traced back to the exact request and response that produced it.
+
+Useful traffic commands:
+
+```bash
+vulnforge requests --db vulnforge.db
+vulnforge traffic --method GET --status 200 --host api.example.test --endpoint /api
+vulnforge request 004 --db vulnforge.db       # request and response together
+vulnforge finding FINDING_ID --db vulnforge.db
+vulnforge endpoint ENDPOINT_ID --db vulnforge.db
+vulnforge search "id=123" --db vulnforge.db
+```
+
+`vulnforge db status`, `db stats`, `db migrate`, and `db backup` operate on the
+same store. The additive research-workspace migration is recorded in
+`schema_migrations`; opening an older compatible database is non-destructive.
+Sensitive headers and cookie values remain redacted in normal display and
+exports. HTTP differences are observations only and are never promoted to a
+confirmed finding without the configured validation contract.
+
+The web Traffic workbench provides filterable history, request/response raw,
+header, query, cookie, body, JSON, authentication, timing, history, tests,
+and evidence views. Stored reports can also be exported as JSON, Markdown,
+HTML, PDF, or redacted HAR through the dashboard export endpoint.
+
 ## Tests and checks
 
 ```bash

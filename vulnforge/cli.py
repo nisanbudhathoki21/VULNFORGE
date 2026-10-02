@@ -1,6 +1,7 @@
 """VulnForge evidence-led assessment CLI."""
 from __future__ import annotations
 import argparse, ipaddress, json, math, os, shutil, signal, sys, time, uuid
+import urllib.parse
 from pathlib import Path
 from urllib.parse import urlsplit
 from .core.authorization import AuthorizationContext
@@ -104,21 +105,39 @@ def build_parser():
     q=sub.add_parser("evidence",help="Inspect finding evidence"); q.add_argument("identifier"); q.add_argument("--db",default=DEFAULT_DB)
     q=sub.add_parser("resume",help="Restart an interrupted scan from its target"); q.add_argument("scan_id",nargs="?"); q.add_argument("--db",default=DEFAULT_DB)
     q=sub.add_parser("findings",help="List findings for a scan (latest scan by default)"); q.add_argument("scan_id",nargs="?"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["table","json"],default="table")
-    q=sub.add_parser("history",help="Inspect redacted stored HTTP exchanges")
-    q.add_argument("scan_id_pos",nargs="?",help="Optional scan ID to filter")
-    q.add_argument("--scan-id",dest="scan_id_opt",default="",help="Scan ID (legacy option form)")
-    q.add_argument("--method",default=""); q.add_argument("--host",default="")
-    q.add_argument("--path",default="",help="Filter URL path substring")
-    q.add_argument("--endpoint",default="",help="Filter URL endpoint substring (legacy alias)"); q.add_argument("--status",type=int,default=None)
-    q.add_argument("--module",default="",help="Filter request provenance/module")
-    q.add_argument("--error",choices=["any","yes","no"],default="any",help="Filter failed/blocked requests")
-    q.add_argument("--parent-exchange",default="",help="Filter follow-up exchanges by parent exchange ID")
-    q.add_argument("--limit",type=int,default=100); q.add_argument("--offset",type=int,default=0)
-    q.add_argument("--format",choices=["table","json"],default="table"); q.add_argument("--db",default=DEFAULT_DB)
-    for command,helptext in (("request","Show a stored redacted request"),("response","Show a stored redacted response")):
-        q=sub.add_parser(command,help=helptext); qs=q.add_subparsers(dest="action",required=True)
-        show=qs.add_parser("show",help="Display one stored exchange side")
-        show.add_argument("exchange_id"); show.add_argument("--db",default=DEFAULT_DB)
+    q=sub.add_parser("finding",help="Show one finding and its complete evidence chain"); q.add_argument("finding_id"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["text","json"],default="text")
+    q=sub.add_parser("endpoint",help="Show one endpoint and its requests, tests, and findings"); q.add_argument("endpoint_id"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["text","json"],default="text")
+    q=sub.add_parser("db",help="Inspect, migrate, back up, or count the canonical SQLite database")
+    db_sub=q.add_subparsers(dest="db_action",required=True)
+    for action in ("status","migrate","stats"):
+        db_sub.add_parser(action,help=f"Database {action}").add_argument("--db",default=DEFAULT_DB)
+    backup=db_sub.add_parser("backup",help="Create a consistent SQLite backup")
+    backup.add_argument("destination",nargs="?",default="",help="Backup path (default: <db>.backup.sqlite)"); backup.add_argument("--db",default=DEFAULT_DB)
+    q=sub.add_parser("search",help="Search endpoints, traffic, parameters, payloads, evidence, and findings"); q.add_argument("query"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--limit",type=int,default=50); q.add_argument("--format",choices=["table","json"],default="table")
+    q=sub.add_parser("export",help="Export stored HTTP traffic or a finding"); q.add_argument("kind",choices=["traffic","finding"]); q.add_argument("identifier"); q.add_argument("--format",choices=["raw","json","har","md"],default="json"); q.add_argument("--out",default=""); q.add_argument("--db",default=DEFAULT_DB)
+    def add_history_parser(command, helptext):
+        q=sub.add_parser(command,help=helptext)
+        q.add_argument("scan_id_pos",nargs="?",help="Optional scan ID to filter")
+        q.add_argument("--scan-id",dest="scan_id_opt",default="",help="Scan ID (legacy option form)")
+        q.add_argument("--method",default=""); q.add_argument("--host",default="")
+        q.add_argument("--path",default="",help="Filter URL path substring")
+        q.add_argument("--endpoint",default="",help="Filter URL endpoint substring (legacy alias)"); q.add_argument("--status",type=int,default=None)
+        q.add_argument("--finding",default="",help="Filter by finding state or finding ID")
+        q.add_argument("--module",default="",help="Filter request provenance/module")
+        q.add_argument("--error",choices=["any","yes","no"],default="any",help="Filter failed/blocked requests")
+        q.add_argument("--parent-exchange",default="",help="Filter follow-up exchanges by parent exchange ID")
+        q.add_argument("--limit",type=int,default=100); q.add_argument("--offset",type=int,default=0)
+        q.add_argument("--format",choices=["table","json"],default="table"); q.add_argument("--db",default=DEFAULT_DB)
+        return q
+    add_history_parser("history","Inspect redacted stored HTTP exchanges")
+    add_history_parser("traffic","Show the HTTP traffic workbench history")
+    add_history_parser("requests","List persisted HTTP requests with filters")
+    for command,helptext in (("request","Show a stored HTTP request and its response"),("response","Show a stored redacted response")):
+        q=sub.add_parser(command,help=helptext)
+        # `request 004` is the primary UX; `request show 004` remains accepted
+        # by the argv normalizer for compatibility with the original CLI.
+        q.add_argument("exchange_id")
+        q.add_argument("--db",default=DEFAULT_DB)
     q=sub.add_parser("diff",help="Compare two stored responses; this is not a vulnerability verdict")
     q.add_argument("exchange_a"); q.add_argument("exchange_b"); q.add_argument("--db",default=DEFAULT_DB)
     q.add_argument("--format",choices=["text","json"],default="text")
@@ -663,6 +682,7 @@ def cmd_scan(args):
     final_status=("stopped" if result.aborted else ("partial" if ctx.stop_reason else "completed"))
     store.record_event(ctx.scan_id,{"kind":"report-generated","message":"Structured reports generated from the stored scan result.",
         "timestamp":time.time(),"data":{"formats":["html","pdf","json","md"]}})
+    store.record_audit("report_generated", object_type="scan", object_id=ctx.scan_id, scan_id=ctx.scan_id, metadata={"formats":["html","pdf","json","md"]})
     store.record_event(ctx.scan_id,{"kind":"scan-complete","message":f"Scan {final_status}.",
         "timestamp":time.time(),"data":{"scan_id":ctx.scan_id,"status":final_status}})
     if args.json_output:
@@ -811,33 +831,71 @@ def cmd_history(args,store):
     endpoint_filter=path_filter or getattr(args,"endpoint","")
     has_error=None if args.error=="any" else args.error=="yes"
     rows=store.list_exchanges(scan_id=scan_id,method=args.method,host=args.host,
-        endpoint=endpoint_filter,status=args.status,limit=args.limit,offset=args.offset,
+        endpoint=endpoint_filter,status=args.status,limit=max(args.limit, 1000) if getattr(args, "finding", "") else args.limit,offset=args.offset,
         module=args.module,has_error=has_error,parent_exchange_id=args.parent_exchange)
+    finding_filter=getattr(args, "finding", "") or ""
+    if finding_filter:
+        desired=finding_filter.upper()
+        desired_status={"CONFIRMED":"VERIFIED","UNCONFIRMED":"CANDIDATE","KILLED":"KILLED","UNTESTABLE":"UNTESTABLE"}.get(desired, desired)
+        allowed_ids=set()
+        findings=store.list_all_findings(scan_id=scan_id, limit=1000)
+        for finding in findings:
+            if desired_status not in {str(finding.get("status","")).upper(), str(finding.get("state","")).upper(), str(finding.get("finding_id","")).upper()}:
+                continue
+            chain=store.get_evidence_chain(str(finding.get("finding_id") or ""))
+            blob=json.dumps(chain, default=str)
+            for row in rows:
+                if row.get("exchange_id") and row["exchange_id"] in blob: allowed_ids.add(row["exchange_id"])
+        rows=[row for row in rows if row.get("exchange_id") in allowed_ids]
+        rows=rows[:args.limit]
     if args.format=="json":
         print(json.dumps(rows,indent=2)); return 0
     if not rows:
         print("No stored HTTP exchanges match these filters."); return 0
-    print(f"{'EXCHANGE ID':26} {'METHOD':7} {'STATUS':6} {'MS':>8} {'BYTES':>13} URL")
-    for row in rows:
-        size=f"{row['request_bytes']}/{row['response_bytes']}"
-        print(f"{row['exchange_id'][:25]:26} {row['method'] or '-':7} {str(row['status'] or '-'):6} "
-              f"{row['duration_ms']:8.1f} {size:>13} {row['url']}")
-    print(f"{len(rows)} redacted exchange(s). Use `vulnforge request show ID` or `vulnforge response show ID`.")
+    command = getattr(args, "command", "history")
+    if command in {"traffic", "requests"}:
+        print("REQUESTS")
+        print(f"{'ID':5} {'METHOD':7} {'STATUS':7} {'HOST':28} {'ENDPOINT':38} {'TIME':>8}")
+        for index, row in enumerate(rows, start=args.offset + 1):
+            parsed=urlsplit(str(row.get("url") or ""))
+            host=parsed.netloc or "—"; endpoint=parsed.path or "/"
+            duration=row.get("duration_ms",0)
+            print(f"{index:03d}  {str(row.get('method') or '-'):7} {str(row.get('status') or '-'):7} {host[:27]:28} {endpoint[:37]:38} {float(duration):7.1f}ms")
+        print(f"{len(rows)} persisted request/response pair(s). Use `vulnforge request 004` for both sides.")
+    else:
+        print(f"{'EXCHANGE ID':26} {'METHOD':7} {'STATUS':6} {'MS':>8} {'BYTES':>13} URL")
+        for row in rows:
+            size=f"{row['request_bytes']}/{row['response_bytes']}"
+            print(f"{row['exchange_id'][:25]:26} {row['method'] or '-':7} {str(row['status'] or '-'):6} "
+                  f"{row['duration_ms']:8.1f} {size:>13} {row['url']}")
+        print(f"{len(rows)} redacted exchange(s). Use `vulnforge request 001` or `vulnforge response 001`.")
     return 0
 
 
 def cmd_exchange_view(side,exchange_id,store):
-    exchange=store.get_exchange(exchange_id)
+    exchange=store.resolve_exchange(exchange_id)
     if not exchange:
         print(f"Exchange not found: {exchange_id}"); return 2
-    if side=="request":
-        result={"exchange_id":exchange_id,"method":exchange.get("method"),"url":exchange.get("url"),
-            "headers":exchange.get("request_headers",{}),"body":exchange.get("request_body","")}
+    parsed=urlsplit(str(exchange.get("url") or ""))
+    target=parsed.path or "/"
+    if parsed.query: target += "?" + parsed.query
+    request_lines=[f"{exchange.get('method','GET')} {target} {exchange.get('request_version','HTTP/1.1')}"]
+    request_lines += [f"{k}: {v}" for k,v in (exchange.get("request_headers") or {}).items()]
+    request_lines += ["", str(exchange.get("request_body") or "[No request body stored]")]
+    response_lines=[f"status: {exchange.get('status') or 'NO RESPONSE'}", f"{exchange.get('response_version','HTTP/1.1')} {exchange.get('status') or 'NO RESPONSE'} {exchange.get('reason_phrase','')}"]
+    response_lines += [f"{k}: {v}" for k,v in (exchange.get("response_headers") or {}).items()]
+    response_lines += ["", str(exchange.get("response_body") or "[No response body stored]"),
+                       f"Response time: {exchange.get('duration_ms',0)}ms",
+                       f"Response size: {len(str(exchange.get('response_body') or '').encode('utf-8'))} bytes"]
+    if side == "request":
+        _print_http_section("HTTP REQUEST", request_lines)
+        print(f"Authentication: {exchange.get('authentication_context_id') or 'Not recorded'}")
+        print(f"Query: {parsed.query or 'None'}")
+        print(f"Source: {exchange.get('module') or exchange.get('source') or 'Not recorded'}")
+        _print_http_section("HTTP RESPONSE", response_lines)
+        print(f"exchange_id: {exchange.get('exchange_id',exchange_id)} · request_id: {exchange.get('request_id','not recorded')} · response_id: {exchange.get('response_id','not recorded')}")
     else:
-        result={"exchange_id":exchange_id,"status":exchange.get("status"),
-            "headers":exchange.get("response_headers",{}),"body":exchange.get("response_body",""),
-            "duration_ms":exchange.get("duration_ms"),"error":exchange.get("error")}
-    print(json.dumps(result,indent=2,ensure_ascii=False))
+        _print_http_section("HTTP RESPONSE", response_lines)
     return 0
 
 
@@ -883,7 +941,156 @@ def cmd_evidence(identifier,store):
     print("Finding ID not found. Finding IDs and scan IDs are distinct."); return 2
 
 
-_BUILTIN_COMMANDS={"scan","tools","status","lab","dashboard","scans","results","report","capture","evidence","resume","findings","history","request","response","diff","plugins"}
+def _print_http_section(title: str, lines: list[str]) -> None:
+    width = 66
+    print(f"╭──────────────── {title} ────────────────╮")
+    for line in lines:
+        safe = str(line).replace("\x1b", "")
+        print(safe[:width])
+    print("╰──────────────────────────────────────────╯")
+
+
+def cmd_finding(args, store):
+    finding = store.get_finding(args.finding_id)
+    if not finding:
+        print(f"Finding not found: {args.finding_id}"); return 2
+    chain = store.get_evidence_chain(args.finding_id)
+    if args.format == "json":
+        print(json.dumps({"finding": finding, "evidence_chain": chain}, indent=2, ensure_ascii=False, default=str)); return 0
+    print("FINDING")
+    print("────────────────────────────────────────────")
+    print(f"ID: {args.finding_id}")
+    state_names={"VERIFIED":"CONFIRMED","CANDIDATE":"UNCONFIRMED","REPRODUCED":"UNCONFIRMED","OBSERVED":"UNCONFIRMED","SIGNAL":"UNCONFIRMED","KILLED":"KILLED","UNTESTABLE":"UNTESTABLE"}
+    print(f"Status: {state_names.get(str(finding.get('status','')).upper(), finding.get('status','UNCONFIRMED'))}")
+    print(f"Type: {finding.get('category') or finding.get('title') or 'Not recorded'}")
+    print(f"Title: {finding.get('title','Not recorded')}")
+    print(f"Endpoint: {finding.get('endpoint') or 'Not recorded'}")
+    print(f"Parameter: {finding.get('parameter') or 'Not recorded'}")
+    print(f"Evidence: {len(chain) or len(finding.get('evidence',[]) or [])}")
+    print(f"Severity: {str(finding.get('severity','info')).upper()} · confidence {finding.get('confidence','Not recorded')}")
+    print("\nTRACEABILITY")
+    if not chain:
+        print("No persisted evidence chain is available; this record is not confirmed.")
+    for item in chain:
+        evidence = item.get("evidence") or {}
+        test = item.get("test") or {}
+        print(f"  Evidence {item.get('evidence_id')} → Test {item.get('test_id') or 'not recorded'} → {test.get('status','not recorded')}")
+        for exchange in item.get("exchanges", [])[:8]:
+            _print_http_section("HTTP REQUEST / RESPONSE", [
+                f"{exchange.get('method','GET')} {exchange.get('url','')}",
+                f"Status: {exchange.get('status') or 'No response'} · {exchange.get('duration_ms',0)} ms",
+                f"Request ID: {exchange.get('request_id','not recorded')}",
+                f"Response ID: {exchange.get('response_id','not recorded')}",
+                "", str(exchange.get('response_body') or "[No response body stored]")])
+        if evidence:
+            print("Evidence detail:", json.dumps(evidence, ensure_ascii=False, default=str)[:1200])
+    print("\nUse `vulnforge export finding %s --format md` for a shareable redacted report." % args.finding_id)
+    return 0
+
+
+def cmd_endpoint(args, store):
+    endpoint = store.get_endpoint_detail(args.endpoint_id)
+    if not endpoint:
+        print(f"Endpoint not found: {args.endpoint_id}"); return 2
+    if args.format == "json":
+        print(json.dumps(endpoint, indent=2, ensure_ascii=False, default=str)); return 0
+    print(f"ENDPOINT #{endpoint.get('id') or endpoint.get('endpoint_id')}")
+    print("\n%s %s" % (endpoint.get("method","GET"), endpoint.get("path") or endpoint.get("url","/")))
+    print(f"Host: {endpoint.get('host') or 'Not recorded'}")
+    print(f"Authentication: {endpoint.get('auth_hint') or 'Not recorded'}")
+    print(f"Parameters: {endpoint.get('parameter_count', 'See parameter inventory')}")
+    print(f"Requests: {endpoint.get('request_count',0)}")
+    print(f"Tests: {endpoint.get('test_count',0)}")
+    print(f"Findings: {endpoint.get('finding_count',0)}")
+    print("\nRecent Activity:")
+    for request in endpoint.get("requests",[])[:20]:
+        print(f"  {request.get('method','GET')} {request.get('path','/')} · {request.get('request_id','')} · {request.get('source','')}")
+    return 0
+
+
+def cmd_db(args):
+    store = Store(args.db)
+    action = args.db_action
+    if action == "status":
+        data = store.database_status()
+        print("DATABASE")
+        print(f"Engine: {data['engine']}")
+        print(f"Path: {Path(data['path']).expanduser()}")
+        print(f"Schema version: {data['schema_version']} · migration: {'APPLIED' if data['migration']['applied'] else 'PENDING'}")
+        for key, value in data["counts"].items(): print(f"{key.replace('_',' ').title():22} {value}")
+        return 0
+    if action == "migrate":
+        result = store.migrate(); print(f"Migration {result['migration_id']}: {'APPLIED' if result['applied'] else 'PENDING'}"); return 0
+    if action == "backup":
+        destination = args.destination or (str(args.db) + ".backup.sqlite")
+        print(f"Backup: {store.backup(destination)}"); return 0
+    data = store.relational_metrics()
+    print(json.dumps(data, indent=2, sort_keys=True)); return 0
+
+
+def cmd_search(args, store):
+    result = store.global_search(args.query, args.limit)
+    if args.format == "json": print(json.dumps(result, indent=2, ensure_ascii=False, default=str)); return 0
+    print(f"SEARCH · {args.query}")
+    for kind, rows in result.items():
+        if rows:
+            print(f"\n{kind.upper()} ({len(rows)})")
+            for row in rows[:args.limit]: print("  " + json.dumps(row, ensure_ascii=False, default=str)[:260])
+    if not any(result.values()): print("No data available")
+    return 0
+
+
+def _exchange_to_har_entry(exchange):
+    parsed = urlsplit(str(exchange.get("url") or ""))
+    return {"startedDateTime": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(exchange.get('timestamp') or time.time())), "time": exchange.get("duration_ms", 0), "request": {"method": exchange.get("method", "GET"), "url": exchange.get("url", ""), "httpVersion": exchange.get("request_version", "HTTP/1.1"), "headers": [{"name": k, "value": v} for k, v in (exchange.get("request_headers") or {}).items()], "queryString": [{"name": k, "value": v} for k, v in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)]}, "response": {"status": exchange.get("status", 0), "statusText": exchange.get("reason_phrase", ""), "httpVersion": exchange.get("response_version", "HTTP/1.1"), "headers": [{"name": k, "value": v} for k, v in (exchange.get("response_headers") or {}).items()], "content": {"size": len(str(exchange.get("response_body") or "").encode()), "mimeType": next((v for k, v in (exchange.get("response_headers") or {}).items() if k.lower() == "content-type"), "")}}}
+
+
+def cmd_export(args, store):
+    if args.kind == "finding":
+        finding = store.get_finding(args.identifier)
+        if not finding: print(f"Finding not found: {args.identifier}"); return 2
+        doc = {"finding": finding, "evidence_chain": store.get_evidence_chain(args.identifier)}
+        default_name = f"finding-{args.identifier}.{args.format}"
+        content = json.dumps(doc, indent=2, ensure_ascii=False, default=str)
+        if args.format == "md": content = "# " + str(finding.get("title", "Finding")) + "\n\n" + "```json\n" + json.dumps(doc, indent=2, ensure_ascii=False, default=str) + "\n```\n"
+        destination = args.out or default_name
+    else:
+        scan = store.get_scan(args.identifier)
+        if scan:
+            exchanges = [store.get_exchange(item.get("exchange_id", "")) for item in store.list_exchanges(scan_id=args.identifier, limit=1000, offset=0)]
+            exchanges = [item for item in exchanges if item]
+            if args.format == "har":
+                content = json.dumps({"log": {"version": "1.2", "creator": {"name": "VulnForge", "version": "0.5"}, "entries": [_exchange_to_har_entry(item) for item in exchanges]}}, indent=2, ensure_ascii=False, default=str)
+            elif args.format == "raw":
+                chunks=[]
+                for item in exchanges:
+                    parsed=urlsplit(str(item.get("url") or "")); target=parsed.path or "/"; target += (("?"+parsed.query) if parsed.query else "")
+                    chunks.append("\\n".join([f"{item.get('method','GET')} {target} HTTP/1.1", *[f"{k}: {v}" for k,v in (item.get('request_headers') or {}).items()], "", str(item.get('request_body') or ""), "", "# RESPONSE", f"HTTP/1.1 {item.get('status') or 0} {item.get('reason_phrase','')}", *[f"{k}: {v}" for k,v in (item.get('response_headers') or {}).items()], "", str(item.get('response_body') or "")]))
+                content="\\n\\n".join(chunks)
+            else:
+                content=json.dumps(exchanges, indent=2, ensure_ascii=False, default=str)
+            destination=args.out or f"traffic-{args.identifier}.{args.format}"
+            Path(destination).write_text(content, encoding="utf-8")
+            print(destination); return 0
+        exchange = store.resolve_exchange(args.identifier)
+        if not exchange: print(f"HTTP exchange not found: {args.identifier}"); return 2
+        if args.format == "raw":
+            parsed = urlsplit(str(exchange.get("url") or "")); target = parsed.path or "/"
+            if parsed.query: target += "?" + parsed.query
+            req = [f"{exchange.get('method','GET')} {target} HTTP/1.1"] + [f"{k}: {v}" for k,v in (exchange.get('request_headers') or {}).items()] + ["", str(exchange.get('request_body') or "")]
+            res = [f"HTTP/1.1 {exchange.get('status') or 0} {exchange.get('reason_phrase','')}"] + [f"{k}: {v}" for k,v in (exchange.get('response_headers') or {}).items()] + ["", str(exchange.get('response_body') or "")]
+            content = "\n".join(req + ["", "# RESPONSE"] + res)
+        elif args.format == "har":
+            parsed = urlsplit(str(exchange.get("url") or ""))
+            content = json.dumps({"log":{"version":"1.2","creator":{"name":"VulnForge","version":"0.5"},"entries":[{"startedDateTime":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"time":exchange.get("duration_ms",0),"request":{"method":exchange.get("method","GET"),"url":exchange.get("url",""),"httpVersion":exchange.get("request_version","HTTP/1.1"),"headers":[{"name":k,"value":v} for k,v in (exchange.get("request_headers") or {}).items()],"queryString":[{"name":k,"value":v} for k,v in urllib.parse.parse_qsl(parsed.query,keep_blank_values=True)]},"response":{"status":exchange.get("status",0),"statusText":exchange.get("reason_phrase",""),"httpVersion":exchange.get("response_version","HTTP/1.1"),"headers":[{"name":k,"value":v} for k,v in (exchange.get("response_headers") or {}).items()],"content":{"size":len(str(exchange.get("response_body") or "").encode()),"mimeType":next((v for k,v in (exchange.get("response_headers") or {}).items() if k.lower()=='content-type'),'' )}}}] }}, indent=2, ensure_ascii=False, default=str)
+        else:
+            content = json.dumps(exchange, indent=2, ensure_ascii=False, default=str)
+        destination = args.out or f"traffic-{args.identifier}.{args.format}"
+    Path(destination).write_text(content, encoding="utf-8")
+    print(destination); return 0
+
+
+_BUILTIN_COMMANDS={"scan","tools","status","lab","dashboard","scans","results","report","capture","evidence","resume","findings","finding","endpoint","db","search","export","history","traffic","requests","request","response","diff","plugins"}
 
 
 def _scan_id_shortcut_parser():
@@ -1005,6 +1212,10 @@ def cmd_scan_id(args,store):
 
 def main(argv=None):
     raw_argv=list(sys.argv[1:] if argv is None else argv)
+    # Preserve the pre-0.5 `request show ID` spelling while making the
+    # documented `request ID` form the canonical parser shape.
+    if len(raw_argv) >= 3 and raw_argv[0] in {"request", "response"} and raw_argv[1] == "show":
+        raw_argv = [raw_argv[0], raw_argv[2], *raw_argv[3:]]
     try:
         if raw_argv and not raw_argv[0].startswith("-") and raw_argv[0] not in _BUILTIN_COMMANDS:
             shortcut=_scan_id_shortcut_parser().parse_args(raw_argv)
@@ -1019,8 +1230,14 @@ def main(argv=None):
         if args.command=="capture" and args.capture_command=="import-har": return cmd_capture_import(args,Store(args.db))
         if args.command=="evidence": return cmd_evidence(args.identifier,Store(args.db))
         if args.command=="history": return cmd_history(args,Store(args.db))
+        if args.command in {"traffic", "requests"}: return cmd_history(args,Store(args.db))
         if args.command=="request": return cmd_exchange_view("request",args.exchange_id,Store(args.db))
         if args.command=="response": return cmd_exchange_view("response",args.exchange_id,Store(args.db))
+        if args.command=="finding": return cmd_finding(args,Store(args.db))
+        if args.command=="endpoint": return cmd_endpoint(args,Store(args.db))
+        if args.command=="db": return cmd_db(args)
+        if args.command=="search": return cmd_search(args,Store(args.db))
+        if args.command=="export": return cmd_export(args,Store(args.db))
         if args.command=="diff": return cmd_diff(args.exchange_a,args.exchange_b,Store(args.db),args.format)
         if args.command=="findings":
             finding_store=Store(args.db)
@@ -1029,8 +1246,11 @@ def main(argv=None):
             rows=finding_store.get_findings(scan_id)
             if args.format=="json": print(json.dumps(rows,indent=2))
             else:
-                for f in rows: print(f"[{f['status'].upper():10}] {f['severity'].upper():8} {f['title']} {f.get('endpoint','')}")
-                print(f"{sum(1 for x in rows if x.get('status')=='VERIFIED')} verified · {sum(1 for x in rows if x.get('status')!='VERIFIED')} candidate/observation record(s)")
+                state_names={"VERIFIED":"CONFIRMED","CANDIDATE":"UNCONFIRMED","REPRODUCED":"UNCONFIRMED","OBSERVED":"UNCONFIRMED","SIGNAL":"UNCONFIRMED","KILLED":"KILLED","UNTESTABLE":"UNTESTABLE"}
+                for f in rows:
+                    state=state_names.get(str(f.get('status','')).upper(), str(f.get('status','UNKNOWN')).upper())
+                    print(f"[{state:10}] {f['severity'].upper():8} {f['title']} {f.get('endpoint','')}")
+                print(f"{sum(1 for x in rows if x.get('status')=='VERIFIED')} confirmed · {sum(1 for x in rows if x.get('status')!='VERIFIED')} unconfirmed/observation record(s)")
             return 0
         if args.command=="plugins":
             from .plugins.base import load_builtin_plugins

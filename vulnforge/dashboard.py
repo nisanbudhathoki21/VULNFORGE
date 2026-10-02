@@ -327,12 +327,19 @@ async def api_get_vf_dashboard():
     store=_v2_store(); scans=store.list_scans()
     recent_findings=store.list_all_findings(limit=5)
     finding_states=store.finding_state_counts()
-    return {"scan_count":len(scans),"target_count":len({s.get("target") for s in scans if s.get("target")}),
+    normalized=store.relational_metrics()
+    database=store.database_status(); database.pop("path", None)
+    return {"scan_count":len(scans),"target_count":normalized.get("targets",len({s.get("target") for s in scans if s.get("target")})),
+        "project_count":normalized.get("projects",0),"host_count":normalized.get("hosts",0),
         "verified_count":sum(s.get("verified_count",0) for s in scans),
         "candidate_count":sum(s.get("candidates_count",0) for s in scans),
         "finding_count":sum(finding_states.values()),"finding_state_counts":finding_states,
-        "endpoint_count":sum(s.get("endpoints_count",0) for s in scans),
-        "request_count":sum(s.get("requests_count",0) for s in scans),
+        "endpoint_count":normalized.get("endpoints",sum(s.get("endpoints_count",0) for s in scans)),
+        "parameter_count":normalized.get("parameters",0),
+        "request_count":normalized.get("requests",sum(s.get("requests_count",0) for s in scans)),
+        "response_count":normalized.get("responses",0),"test_count":normalized.get("tests",0),
+        "evidence_count":normalized.get("evidence",0),"control_count":normalized.get("controls",0),
+        "differential_count":normalized.get("diffs",0),"database":database,
         "recent_scans":scans[:5],"recent_findings":recent_findings}
 
 @app.get("/api/vf/settings")
@@ -389,6 +396,22 @@ async def api_get_vf_findings(scan_id: Optional[str]=Query(None),status: Optiona
 async def api_get_vf_evidence(scan_id: Optional[str]=Query(None),finding_id: Optional[str]=Query(None),
                              limit: int=Query(500,ge=1,le=1000),offset: int=Query(0,ge=0)):
     return _v2_store().list_evidence(scan_id or "",finding_id or "",limit,offset)
+
+@app.get("/api/vf/findings/{finding_id}")
+async def api_get_vf_finding(finding_id: str):
+    store=_v2_store(); finding=store.get_finding(finding_id)
+    if not finding: raise HTTPException(status_code=404, detail="Finding not found")
+    return {"finding": finding, "evidence_chain": store.get_evidence_chain(finding_id)}
+
+@app.get("/api/vf/endpoints/{endpoint_id}")
+async def api_get_vf_endpoint(endpoint_id: str):
+    endpoint=_v2_store().get_endpoint_detail(endpoint_id)
+    if not endpoint: raise HTTPException(status_code=404, detail="Endpoint not found")
+    return endpoint
+
+@app.get("/api/vf/search")
+async def api_search_vf(q: str=Query(..., min_length=1, max_length=200), limit: int=Query(50,ge=1,le=200)):
+    return _v2_store().global_search(q, limit)
 
 @app.get("/api/vf/reports")
 async def api_get_vf_reports():
@@ -467,7 +490,16 @@ async def api_export_vf_report(scan_id: str,report_format: str):
     store=_v2_store(); report=store.get_report(scan_id)
     if report is None: raise HTTPException(status_code=404,detail="A completed report is not available for this scan yet.")
     fmt=report_format.lower()
-    if fmt=="json":
+    if fmt=="har":
+        exchanges=store.list_exchanges(scan_id=scan_id,limit=1000,offset=0)
+        entries=[]
+        for item in exchanges:
+            exchange=store.get_exchange(item.get("exchange_id","")) or {}
+            parsed=urllib.parse.urlsplit(str(exchange.get("url") or item.get("url") or ""))
+            entries.append({"startedDateTime":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime(exchange.get("timestamp") or time.time())),"time":exchange.get("duration_ms",0),"request":{"method":exchange.get("method","GET"),"url":exchange.get("url",""),"httpVersion":exchange.get("request_version","HTTP/1.1"),"headers":[{"name":k,"value":v} for k,v in (exchange.get("request_headers") or {}).items()],"queryString":[{"name":k,"value":v} for k,v in urllib.parse.parse_qsl(parsed.query,keep_blank_values=True)]},"response":{"status":exchange.get("status",0),"statusText":exchange.get("reason_phrase","")+"", "httpVersion":exchange.get("response_version","HTTP/1.1"),"headers":[{"name":k,"value":v} for k,v in (exchange.get("response_headers") or {}).items()],"content":{"size":len(str(exchange.get("response_body") or "").encode("utf-8")),"mimeType":next((v for k,v in (exchange.get("response_headers") or {}).items() if str(k).lower()=="content-type"),"")}}})
+        content=json.dumps({"log":{"version":"1.2","creator":{"name":"VulnForge","version":"0.5"},"entries":entries}},ensure_ascii=False,indent=2).encode("utf-8")
+        media="application/json"
+    elif fmt=="json":
         from vulnforge.report.json_report import build_report_dict
         content=json.dumps(build_report_dict(report),ensure_ascii=False,indent=2,default=str).encode("utf-8")
         media="application/json"
@@ -482,7 +514,7 @@ async def api_export_vf_report(scan_id: str,report_format: str):
             else: write_pdf_report(report,path); media="application/pdf"
             content=Path(path).read_bytes()
     else:
-        raise HTTPException(status_code=400,detail="Supported formats: json, md, html, pdf")
+        raise HTTPException(status_code=400,detail="Supported formats: json, md, html, pdf, har")
     safe_id="".join(ch for ch in scan_id if ch.isalnum() or ch in "-_" )[:80]
     return Response(content=content,media_type=media,headers={"Content-Disposition":f'attachment; filename="VULNFORGE_Report_{safe_id}.{fmt}"'})
 
@@ -684,6 +716,7 @@ async def api_repeater_send(req: RepeaterRequest):
         sensitive=set(SENSITIVE_HEADERS)
         sensitive.update(name for name in headers if re.search(r"(?i)(auth|token|secret|key|cookie|session|pass)",name))
         store.record_exchange(scan_id,exchange.to_dict(),sensitive_headers=sensitive,redact=True)
+        store.record_audit("request_replayed", object_type="exchange", object_id=exchange.exchange_id, scan_id=scan_id, metadata={"parent_exchange_id": req.source_exchange_id, "title": req.title})
         return store.get_exchange(exchange.exchange_id) or exchange.to_dict()
     except HTTPException:
         raise

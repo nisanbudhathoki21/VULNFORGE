@@ -76,6 +76,30 @@
     catch { return 'Stored body is not valid JSON. Use the Body view to inspect it as text.'; }
   }
 
+  function formatOverview(exchange, side) {
+    const url = parsedUrl(exchange);
+    const headers = headerPairs(exchange, side);
+    const body = bodyOf(exchange, side);
+    if (side === 'request') {
+      return [`Method: ${exchange?.method || 'Not recorded'}`, `URL: ${exchange?.url || 'Not recorded'}`, `Host: ${url?.host || 'Not recorded'}`, `Path: ${url?.pathname || '/'}`, `Query parameters: ${url?.searchParams?.size || 0}`, `Headers: ${headers.length}`, `Body: ${body ? `${body.length} characters` : 'empty'}`, `Authentication context: ${exchange?.authentication_context_id || 'Not recorded'}`, `Source: ${exchange?.module || exchange?.source || 'Not recorded'}`, `Timestamp: ${exchange?.timestamp || 'Not recorded'}`].join('\\n');
+    }
+    return [`Status: ${exchange?.status || 'No response'}`, `Reason: ${exchange?.reason_phrase || 'Not recorded'}`, `Content-Type: ${headers.find(([name]) => name.toLowerCase() === 'content-type')?.[1] || 'Not recorded'}`, `Content-Length: ${body.length} bytes`, `Response time: ${exchange?.duration_ms ?? 'Not recorded'} ms`, `Server: ${headers.find(([name]) => name.toLowerCase() === 'server')?.[1] || 'Not recorded'}`, `Redirect: ${headers.find(([name]) => name.toLowerCase() === 'location')?.[1] || 'None'}`].join('\\n');
+  }
+
+  function formatAuthentication(exchange) {
+    const headers = headerPairs(exchange, 'request').filter(([name]) => /authorization|cookie|token|session/i.test(name));
+    return headers.length ? headers.map(([name, value]) => `${name}: ${value}`).join('\\n') : 'No authentication headers were recorded. Sensitive values are redacted by default.';
+  }
+
+  function formatHistory(exchange) {
+    return [`Exchange: ${exchange?.exchange_id || 'Not recorded'}`, `Parent exchange: ${exchange?.parent_exchange_id || 'None'}`, `Request ID: ${exchange?.request_id || 'Not recorded'}`, `Response ID: ${exchange?.response_id || 'Not recorded'}`, `Module: ${exchange?.module || 'Not recorded'}`].join('\\n');
+  }
+
+  function formatLinked(exchange, kind) {
+    const values = exchange?.[`${kind}_ids`] || exchange?.[`${kind}_id`];
+    return values ? JSON.stringify(values, null, 2) : `No ${kind} links were stored for this exchange.`;
+  }
+
   function formatTiming(exchange) {
     const duration = Number(exchange?.duration_ms);
     const requestBytes = new TextEncoder().encode(bodyOf(exchange, 'request')).length;
@@ -97,6 +121,7 @@
   function render(exchange, side, view, rawRenderer) {
     if (!exchange || !['request', 'response'].includes(side)) return 'No exchange selected.';
     switch (view) {
+      case 'overview': return formatOverview(exchange, side);
       case 'raw': return formatRaw(exchange, side, rawRenderer);
       case 'headers': return formatHeaders(exchange, side);
       case 'query': return side === 'request' ? formatQuery(exchange) : 'Query parameters belong to the request URL.';
@@ -105,6 +130,11 @@
       case 'body': return formatBody(exchange, side);
       case 'json': return formatJson(exchange, side);
       case 'timing': return formatTiming(exchange);
+      case 'authentication': return side === 'request' ? formatAuthentication(exchange) : 'Authentication context belongs to the request.';
+      case 'history': return formatHistory(exchange);
+      case 'tests': return formatLinked(exchange, 'test');
+      case 'evidence': return formatLinked(exchange, 'evidence');
+      case 'diff': return 'Select another stored exchange in the comparison panel below to view a persisted differential. Differences are not vulnerability verdicts.';
       default: return `Unsupported ${side} view: ${view}`;
     }
   }

@@ -167,8 +167,14 @@
       };
       metric('scans', data.scan_count);
       metric('verified', data.verified_count);
+      metric('targets', data.target_count);
+      metric('hosts', data.host_count);
       metric('endpoints', data.endpoint_count);
+      metric('parameters', data.parameter_count);
       metric('requests', data.request_count);
+      metric('responses', data.response_count);
+      metric('tests', data.test_count);
+      metric('evidence', data.evidence_count);
       state.savedScans = Array.isArray(scans) ? scans : [];
       renderWorkbenchRecentScans(state.savedScans);
       const select = byId('workbench-scan-select');
@@ -976,8 +982,18 @@
       const rows=await apiGet(`/api/vf/findings?${q}`);body.replaceChildren();if(!rows.length){tableMessage(body,cols,verifiedOnly?'No VERIFIED findings are stored.':'No findings match these filters.');return;}
       rows.forEach(item=>{const row=document.createElement('tr');if(verifiedOnly){appendCell(row,item.severity);appendCell(row,item.title);appendCell(row,item.endpoint||item.target,'traffic-url-cell');appendCell(row,item.parameter);appendCell(row,item.confidence);appendCell(row,item.scan_id);}else{
         appendCell(row,item.status,'status-pill');appendCell(row,item.severity);appendCell(row,item.title);appendCell(row,item.category);appendCell(row,item.endpoint||item.target,'traffic-url-cell');appendCell(row,item.parameter);appendCell(row,item.scan_id);}
-        row.addEventListener('click',()=>{state.evidenceFindingId=item.finding_id||'';navigate('evidence');});body.append(row);});
+        row.addEventListener('click',()=>{state.evidenceFindingId=item.finding_id||'';if(!verifiedOnly){loadFindingDetail(item.finding_id||'');byId('finding-detail-view')?.scrollIntoView({block:'nearest'});}else navigate('evidence');});body.append(row);});
     }catch(error){tableMessage(body,cols,`Could not load findings: ${error.message}`);}
+  }
+
+  async function loadFindingDetail(findingId) {
+    const output = byId('finding-detail-view');
+    if (!output || !findingId) return;
+    output.textContent = 'Loading finding evidence chain…';
+    try {
+      const result = await apiGet(`/api/vf/findings/${encodeURIComponent(findingId)}`);
+      output.textContent = JSON.stringify(result, null, 2);
+    } catch (error) { output.textContent = `Could not load finding detail: ${error.message}`; }
   }
 
   async function loadEvidencePage() {
@@ -994,7 +1010,7 @@
     try{const rows=await apiGet('/api/vf/reports');body.replaceChildren();if(!rows.length){tableMessage(body,6,'No saved reports are available.');return;}
       rows.forEach(scan=>{const row=document.createElement('tr');appendCell(row,scan.scan_id);appendCell(row,scan.target,'traffic-url-cell');appendCell(row,scan.status);appendCell(row,`${scan.verified_count} verified / ${scan.candidates_count} candidate`);appendCell(row,formatDate(scan.started_at));const cell=document.createElement('td');
         cell.append(actionButton('Coverage',()=>loadScanDetail(scan.scan_id),'text-button'));
-        if(scan.status==='running'){cell.append(document.createTextNode('Report will be available when the scan finishes.'));}else ['json','html','md','pdf'].forEach(fmt=>{const link=document.createElement('a');link.href=`/api/vf/scans/${encodeURIComponent(scan.scan_id)}/export/${fmt}`;link.textContent=fmt.toUpperCase();link.className='export-link';link.setAttribute('download','');cell.append(link);});row.append(cell);body.append(row);});
+        if(scan.status==='running'){cell.append(document.createTextNode('Report will be available when the scan finishes.'));}else ['json','html','md','pdf','har'].forEach(fmt=>{const link=document.createElement('a');link.href=`/api/vf/scans/${encodeURIComponent(scan.scan_id)}/export/${fmt}`;link.textContent=fmt.toUpperCase();link.className='export-link';link.setAttribute('download','');cell.append(link);});row.append(cell);body.append(row);});
     }catch(error){tableMessage(body,6,`Could not load reports: ${error.message}`);}
   }
 
