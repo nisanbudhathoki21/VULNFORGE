@@ -106,3 +106,20 @@ def test_cors_executor_does_nothing_without_explicit_active_request(mock_server)
     asyncio.run(run())
     assert ctx.tests==[]
     assert ctx.test_plan[0].status=="BLOCKED"
+
+
+def test_cors_prioritizes_wp_json_and_api_routes_over_alphabetical_html(mock_server):
+    from vulnforge.engine.orchestrator import HypothesisStage
+    from vulnforge.core.models import Endpoint
+    ctx=_context(mock_server+"/cors/reflect")
+    ctx.hypotheses=[]
+    for i in range(20):
+        u=f"{mock_server}/page-{i:02d}"
+        ep=Endpoint(url=u,normalized=u,method="GET",status=200,scope_status="IN_SCOPE")
+        ctx.add_endpoint(ep)
+    wp_url=f"{mock_server}/wp-json/"
+    wp_ep=Endpoint(url=wp_url,normalized=wp_url,method="GET",status=200,scope_status="IN_SCOPE")
+    ctx.add_endpoint(wp_ep)
+    asyncio.run(HypothesisStage().run(ctx))
+    cors_hyps=[h for h in ctx.hypotheses if h.category=="cors-policy-review"]
+    assert any("/wp-json/" in h.endpoint for h in cors_hyps)

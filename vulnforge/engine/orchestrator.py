@@ -766,7 +766,7 @@ class HypothesisStage(Stage):
                     reason="Parameter name is a review lead only; behavior and security impact have not been tested.",
                     evidence=[p.source],confidence=min(p.confidence,0.5),test_strategy="Manual, authorized review; no supported active test mapped."))
         from .verification import expand_authorization_specs
-        for i,spec in enumerate(expand_authorization_specs(ctx.config.auth_data)):
+        for i,spec in enumerate(expand_authorization_specs(getattr(ctx.config,"auth_data",{}))):
             h_id="hyp-"+uuid.uuid4().hex[:12]
             ctx.hypotheses.append(HypothesisRecord(h_id,"object-level-authorization","KEEP",
                 endpoint=str(spec.get("url","")),actor_id="actor-"+str(spec.get("other_identity","")),
@@ -782,12 +782,20 @@ class HypothesisStage(Stage):
                 cors_surfaces.setdefault(str(exchange.url),SimpleNamespace(url=exchange.url,method="GET",
                     status=exchange.status,scope_status="IN_SCOPE",evidence_ids=[exchange.exchange_id]))
         def _cors_surface_order(endpoint):
+            url_str=str(endpoint.url)
+            url_low=url_str.lower()
             exchange=next((item for item in getattr(getattr(ctx,"requester",None),"exchanges",[])
                            if item.url==endpoint.url),None)
             marker=bool(exchange and (exchange.header("access-control-allow-origin") or
                 exchange.header("access-control-allow-credentials").lower()=="true" or
+                exchange.header("access-control-allow-headers") or
+                exchange.header("access-control-expose-headers") or
+                exchange.header("access-control-allow-methods") or
                 "origin" in exchange.header("vary").lower()))
-            return (not marker,str(endpoint.url))
+            api_like=any(tok in url_low for tok in ("/wp-json","/api/","/graphql","/rest/","rest_route=")) or bool(
+                exchange and "json" in (exchange.header("content-type") or "").lower()
+            )
+            return (not marker,not api_like,url_str)
         for endpoint in sorted(cors_surfaces.values(),key=_cors_surface_order):
             url=str(endpoint.url)
             if (endpoint.method.upper()!="GET" or endpoint.scope_status!="IN_SCOPE" or

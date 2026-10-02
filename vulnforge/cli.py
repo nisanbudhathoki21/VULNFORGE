@@ -357,8 +357,12 @@ def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
     if not detailed:
         from collections import Counter
         from .core.outcomes import finding_result_status, test_result_status
+        from .core.redaction import redact_url_query_values
         finding_states=Counter(finding_result_status(f.to_dict()) for f in c.findings)
-        test_states=Counter(test_result_status(t) for t in c.tests)
+        test_states=Counter(test_result_status(t) for t in c.tests if str(t.get("status","")).upper()!="VERIFIED")
+        combined_states=Counter(finding_states)
+        for k,v in test_states.items():
+            combined_states[k]+=v
         selected=[row for row in getattr(c,"vulnerability_matrix",[]) if row.get("selected")]
         supported=sum(1 for row in selected if row.get("supported"))
         unsupported=sum(1 for row in selected if not row.get("supported"))
@@ -386,12 +390,32 @@ def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
         rate_text=f"{configured_rate:g} req/s max" if isinstance(configured_rate,(int,float)) else "profile default"
         print(f"  Scan pace  : {rate_text} · budget {configured_budget or 'profile default'} · target 429s {throttled}, Retry-After on {retry_after} response(s)")
         print(f"Testing: {len(c.tests)} executed · {len(c.hypotheses)} hypotheses · {supported} supported class(es) selected · {unsupported} unsupported")
-        print("Results: " + " · ".join(f"{name} {finding_states.get(name,0)}" for name in
+        print("Results: " + " · ".join(f"{name} {combined_states.get(name,0)}" for name in
               ("CONFIRMED","UNCONFIRMED","KILLED","UNTESTABLE","SKIPPED","UNSUPPORTED","INFORMATIONAL")))
         for finding in verified[:10]:
             print(f"  CONFIRMED · {finding.severity.upper()} · {safe_text(finding.title)}")
         if not quiet:
-            for finding in candidates[:5]:
+            ordered_tests=sorted(
+                [t for t in c.tests if str(t.get("status","")).upper()!="VERIFIED"],
+                key=lambda t:(0 if t.get("reproduction_status")=="REPRODUCED" else 1, str(t.get("type","")))
+            )
+            for item in ordered_tests[:8]:
+                t_state=test_result_status(item)
+                repro="REPRODUCED · " if item.get("reproduction_status")=="REPRODUCED" else ""
+                t_name=str(item.get("type","test")).replace("-"," ").title()
+                ep=str(item.get("endpoint",""))
+                if ep:
+                    safe_ep=redact_url_query_values(ep)
+                    parts=urlsplit(safe_ep)
+                    ep=(parts.hostname or "")+(parts.path or "/")
+                    if parts.query: ep+="?"+parts.query
+                ep_text=f" · {ep[:80]}" if ep else ""
+                print(f"  {t_state} · {repro}{t_name}{ep_text}")
+            ordered_candidates=sorted(
+                candidates,
+                key=lambda f:(1 if finding_result_status(f.to_dict())=="INFORMATIONAL" else 0, f.title)
+            )
+            for finding in ordered_candidates[:8]:
                 print(f"  {finding_result_status(finding.to_dict())} · {safe_text(finding.title)}")
             print("Reports: " + ", ".join(files.values()))
         else:

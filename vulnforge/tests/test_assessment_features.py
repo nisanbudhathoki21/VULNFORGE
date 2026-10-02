@@ -54,7 +54,7 @@ def test_intelligence_and_reports_persist(mock_server, tmp_path):
     assert doc["application_model"]["application_id"]
     assert doc["api_documents"] and doc["api_inventory"]
     assert doc["live_observations"] and doc["live_state_counts"]
-    assert doc["vulnerability_matrix"] and any(row["status"]=="UNSUPPORTED" for row in doc["vulnerability_matrix"])
+    assert doc["vulnerability_matrix"] and all(row["supported"] for row in doc["vulnerability_matrix"])
     assert doc["scan"]["test_profile"]=="full"
     assert not store.get_finding(ctx.scan_id)
     paths=[tmp_path/"a.html",tmp_path/"a.md",tmp_path/"a.pdf",tmp_path/"a.json"]

@@ -58,9 +58,11 @@ def class_result_status(row: Dict[str, Any]) -> str:
         return "UNSUPPORTED"
     if status in {"CONFIRMED", "VERIFIED"} or int(row.get("verified", 0)) > 0:
         return "CONFIRMED"
-    if status in {"KILLED"}:
+    if status in {"KILLED", "TESTED_CLEAN"}:
         return "KILLED"
-    if status in {"INCONCLUSIVE", "UNCONFIRMED"} or int(row.get("inconclusive", 0)) > 0:
+    if (status in {"INCONCLUSIVE", "UNCONFIRMED", "OBSERVATION_ONLY"}
+            or int(row.get("inconclusive", 0)) > 0
+            or int(row.get("reproduced_observations", 0)) > 0):
         return "UNCONFIRMED"
     if status in {"NO_TEST_SURFACE", "UNTESTABLE", "PLANNED"}:
         return "UNTESTABLE"

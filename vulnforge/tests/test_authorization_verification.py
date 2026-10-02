@@ -33,9 +33,9 @@ def test_explicit_cross_account_test_verifies_and_redacts(mock_server,tmp_path):
     assert doc["test_plan"][0]["status"]=="EXECUTED"
     assert doc["scan"]["test_profile"]=="critical"
     bola=next(row for row in doc["vulnerability_matrix"] if row["class_id"]=="bola")
-    unsupported=next(row for row in doc["vulnerability_matrix"] if row["class_id"]=="ssrf")
+    ssrf_row=next(row for row in doc["vulnerability_matrix"] if row["class_id"]=="ssrf")
     assert bola["selected"] and bola["status"]=="CONFIRMED" and bola["executed"]==1
-    assert unsupported["selected"] and unsupported["status"]=="UNSUPPORTED" and unsupported["executed"]==0
+    assert ssrf_row["selected"] and ssrf_row["supported"] is True and ssrf_row["status"] in {"TESTED_CLEAN","OBSERVATION_ONLY","NO_TEST_SURFACE"}
     assert doc["security_properties"] and doc["actors"] and doc["resources"]
     assert doc["application_model"] and doc["risk_summary"]["verified_total"]==1
     assert len(doc["findings"])==1 and doc["findings"][0]["status"]=="VERIFIED"
