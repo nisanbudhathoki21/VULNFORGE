@@ -105,6 +105,7 @@ def build_parser():
     q=sub.add_parser("evidence",help="Inspect finding evidence"); q.add_argument("identifier"); q.add_argument("--db",default=DEFAULT_DB)
     q=sub.add_parser("resume",help="Restart an interrupted scan from its target"); q.add_argument("scan_id",nargs="?"); q.add_argument("--db",default=DEFAULT_DB)
     q=sub.add_parser("findings",help="List findings for a scan (latest scan by default)"); q.add_argument("scan_id",nargs="?"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["table","json"],default="table")
+    q=sub.add_parser("coverage",help="Show actual vulnerability/test coverage for a stored scan"); q.add_argument("scan_id",nargs="?"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["table","json"],default="table")
     q=sub.add_parser("finding",help="Show one finding and its complete evidence chain"); q.add_argument("finding_id"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["text","json"],default="text")
     q=sub.add_parser("endpoint",help="Show one endpoint and its requests, tests, and findings"); q.add_argument("endpoint_id"); q.add_argument("--db",default=DEFAULT_DB); q.add_argument("--format",choices=["text","json"],default="text")
     q=sub.add_parser("db",help="Inspect, migrate, back up, or count the canonical SQLite database")
@@ -950,6 +951,40 @@ def _print_http_section(title: str, lines: list[str]) -> None:
     print("╰──────────────────────────────────────────╯")
 
 
+def cmd_coverage(args, store):
+    scan_id = args.scan_id or (store.list_scans()[0]["scan_id"] if store.list_scans() else "")
+    if not scan_id:
+        print("No stored scans.")
+        return 0
+    report = store.get_report(scan_id)
+    if not report:
+        print(f"No stored report available for scan: {scan_id}")
+        return 2
+    from .core.coverage import coverage_summary
+    class _Context:
+        vulnerability_matrix = report.get("vulnerability_matrix", [])
+        endpoints = {str(i): item for i, item in enumerate(report.get("endpoints", []) or [])}
+        parameters = {str(i): item for i, item in enumerate(report.get("parameters", []) or [])}
+        requester = type("Requester", (), {"exchanges": report.get("exchanges", []) or report.get("http_history", []) or []})()
+    summary = coverage_summary(_Context())
+    if args.format == "json":
+        print(json.dumps({"scan_id": scan_id, **summary}, indent=2, ensure_ascii=False, default=str))
+        return 0
+    print(f"COVERAGE · {scan_id}")
+    print(f"Classes: {summary['total']} · selected: {summary['selected']} · supported: {summary['supported']} · evidence-backed: {summary['evidence_backed']}")
+    if summary["counts"]:
+        print("States: " + " · ".join(f"{key} {value}" for key, value in sorted(summary["counts"].items())))
+    print(f"{'STATUS':14} {'CATEGORY':34} {'SURFACE':>8} {'EXECUTED':>9} NOTES")
+    for row in summary["rows"]:
+        state = str(row.get("final_status") or row.get("status") or "NOT_TESTED")
+        category = str(row.get("name") or row.get("category") or row.get("class_id") or "Unknown")
+        surface = row.get("test_surface_count", 0)
+        executed = row.get("executed", 0)
+        note = str(row.get("reason") or row.get("notes") or "")
+        print(f"{state:14} {category[:33]:34} {str(surface):>8} {str(executed):>9} {note[:100]}")
+    return 0
+
+
 def cmd_finding(args, store):
     finding = store.get_finding(args.finding_id)
     if not finding:
@@ -1090,7 +1125,7 @@ def cmd_export(args, store):
     print(destination); return 0
 
 
-_BUILTIN_COMMANDS={"scan","tools","status","lab","dashboard","scans","results","report","capture","evidence","resume","findings","finding","endpoint","db","search","export","history","traffic","requests","request","response","diff","plugins"}
+_BUILTIN_COMMANDS={"scan","tools","status","lab","dashboard","scans","results","report","capture","evidence","resume","findings","coverage","finding","endpoint","db","search","export","history","traffic","requests","request","response","diff","plugins"}
 
 
 def _scan_id_shortcut_parser():
@@ -1239,6 +1274,7 @@ def main(argv=None):
         if args.command=="search": return cmd_search(args,Store(args.db))
         if args.command=="export": return cmd_export(args,Store(args.db))
         if args.command=="diff": return cmd_diff(args.exchange_a,args.exchange_b,Store(args.db),args.format)
+        if args.command=="coverage": return cmd_coverage(args,Store(args.db))
         if args.command=="findings":
             finding_store=Store(args.db)
             scan_id=args.scan_id or (finding_store.list_scans()[0]["scan_id"] if finding_store.list_scans() else None)

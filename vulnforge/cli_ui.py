@@ -16,15 +16,12 @@ BANNER_ART = r"""██╗   ██╗██╗   ██╗██╗     ██�
 ╚██╗ ██╔╝██║   ██║██║     ██║╚██╗██║██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝
  ╚████╔╝ ╚██████╔╝███████╗██║ ╚████║██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗
   ╚═══╝   ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══════╝"""
-SUBTITLE = "RED TEAM SECURITY ENGINE"
-
-
 def banner_lines(width: int = 100) -> List[str]:
-    """Return the full wordmark when it fits, otherwise a clean narrow fallback."""
+    """Return only the VULNFORGE title, with a narrow fallback."""
     art = BANNER_ART.splitlines()
     if width < max(map(len, art)) + 2:
-        return ["VULNFORGE", SUBTITLE]
-    return [*art, "", SUBTITLE.center(max(map(len, art)))]
+        return ["VULNFORGE"]
+    return list(art)
 
 
 def print_banner(stream=None, *, color: bool = False, width: Optional[int] = None) -> None:
@@ -194,7 +191,7 @@ class LiveScanDashboard:
         if inner >= max(map(len, BANNER_ART.splitlines())) + 2:
             out.extend(banner_lines(inner))
         else:
-            out.append("VULNFORGE  /  RED TEAM SECURITY ENGINE")
+            out.append("VULNFORGE")
         elapsed = max(0, int(self.clock() - self.started))
         out.append(f"TARGET  {self.target}")
         out.append(f"STATUS  {self.status}   ELAPSED  {elapsed // 60:02d}:{elapsed % 60:02d}   HTTP EXCHANGES  {self.requests}")

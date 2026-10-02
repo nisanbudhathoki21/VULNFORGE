@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import hmac
 import ipaddress
 import json
 import os
@@ -140,6 +141,28 @@ def _v2_store():
         return V2Store(path)
     except (sqlite3.DatabaseError,RuntimeError) as exc:
         raise HTTPException(status_code=409,detail="The configured scan database is not compatible with this VULNFORGE build.") from exc
+
+
+def _replay_access_allowed(request: Optional[Request]) -> None:
+    """Protect active replay while keeping the dashboard readable remotely.
+
+    A dashboard bound to a LAN/public interface is intentionally read-only
+    unless an operator configures VULNFORGE_DASHBOARD_TOKEN. The browser
+    consent checkbox is not treated as authentication.
+    """
+    configured = os.environ.get("VULNFORGE_DASHBOARD_TOKEN", "")
+    supplied = request.headers.get("x-vulnforge-dashboard-token", "") if request else ""
+    if configured:
+        if not supplied or not hmac.compare_digest(supplied, configured):
+            raise HTTPException(status_code=401, detail="Guarded replay requires the configured dashboard access token.")
+        return
+    client_host = request.client.host if request and request.client else "127.0.0.1"
+    try:
+        is_loopback = ipaddress.ip_address(client_host).is_loopback
+    except ValueError:
+        is_loopback = client_host.lower() in {"localhost", "localhost.localdomain"}
+    if not is_loopback:
+        raise HTTPException(status_code=403, detail="Remote dashboard access is read-only. Configure VULNFORGE_DASHBOARD_TOKEN for guarded replay.")
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
@@ -434,6 +457,19 @@ async def api_get_vf_scan(scan_id: str):
         raise HTTPException(status_code=404,detail="Scan not found")
     return {"scan":scan,"status":scan.get("status"),"in_progress":scan.get("status")=="running"}
 
+@app.get("/api/vf/scans/{scan_id}/coverage")
+async def api_get_vf_scan_coverage(scan_id: str):
+    store = _v2_store(); report = store.get_report(scan_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Scan report not found")
+    from vulnforge.core.coverage import coverage_summary
+    class _Context:
+        vulnerability_matrix = report.get("vulnerability_matrix", [])
+        endpoints = {str(i): item for i, item in enumerate(report.get("endpoints", []) or [])}
+        parameters = {str(i): item for i, item in enumerate(report.get("parameters", []) or [])}
+        requester = type("Requester", (), {"exchanges": report.get("exchanges", []) or report.get("http_history", []) or []})()
+    return {"scan_id": scan_id, **coverage_summary(_Context())}
+
 @app.get("/api/vf/scans/{scan_id}/objects/{object_type}")
 async def api_get_vf_scan_objects(scan_id: str, object_type: str,
                                  search: Optional[str]=Query(None,max_length=200),
@@ -639,8 +675,9 @@ async def api_get_vf_exchange(exchange_id: str):
     return exchange
 
 @app.post("/api/vf/repeater/send")
-async def api_repeater_send(req: RepeaterRequest):
+async def api_repeater_send(req: RepeaterRequest, request: Request = None):
     """Send one edited request through the scan's saved scope and common request gate."""
+    _replay_access_allowed(request)
     if not req.authorized:
         raise HTTPException(status_code=403, detail="Confirm that you own or are explicitly authorized to test this scan target.")
     if not req.source_exchange_id or len(req.source_exchange_id)>100:

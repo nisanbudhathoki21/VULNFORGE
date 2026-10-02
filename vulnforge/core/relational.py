@@ -289,8 +289,24 @@ def ensure_relational_schema(con: sqlite3.Connection) -> None:
     _add_column(con, "endpoints", "endpoint_id", "TEXT")
     _add_column(con, "endpoints", "target_id", "TEXT")
     _add_column(con, "endpoints", "authentication_context_id", "TEXT")
+    _add_column(con, "endpoints", "state", "TEXT NOT NULL DEFAULT 'DISCOVERED'")
+    _add_column(con, "endpoints", "state_reason", "TEXT NOT NULL DEFAULT ''")
     _add_column(con, "endpoints", "first_seen", "REAL")
     _add_column(con, "endpoints", "last_seen", "REAL")
+    # Test-run columns make the evidence chain queryable without unpacking the
+    # compatibility JSON document. They are additive for older workspaces.
+    for column, definition in (
+        ("pipeline_stage", "TEXT NOT NULL DEFAULT 'TEST PLANNING'"),
+        ("pipeline_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("scope_decision", "TEXT NOT NULL DEFAULT ''"),
+        ("endpoint", "TEXT NOT NULL DEFAULT ''"),
+        ("method", "TEXT NOT NULL DEFAULT ''"),
+        ("parameter", "TEXT NOT NULL DEFAULT ''"),
+        ("hypothesis_id", "TEXT"),
+        ("authentication_context_id", "TEXT"),
+        ("confidence_rationale", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        _add_column(con, "test_runs", column, definition)
     _add_column(con, "parameters", "parameter_id", "TEXT")
     _add_column(con, "parameters", "endpoint_id", "TEXT")
     _add_column(con, "parameters", "observed_values", "TEXT")
@@ -321,10 +337,11 @@ def ensure_relational_schema(con: sqlite3.Connection) -> None:
             host_port = parsed.port or (443 if parsed.scheme == "https" else 80)
             con.execute("INSERT OR IGNORE INTO hosts(host_id,target_id,scan_id,hostname,ip_address,source,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?)", (host_id, target_id, scan_id, parsed.hostname, None, "target", started_at or now, finished_at or started_at or now))
             con.execute("INSERT OR IGNORE INTO ports(port_id,host_id,port,scheme,service,source) VALUES (?,?,?,?,?,?)", (stable_id("port", f"{host_id}:{host_port}"), host_id, host_port, parsed.scheme, "https" if parsed.scheme == "https" else "http", "target"))
-        endpoint_rows = con.execute("SELECT id,method,url,normalized,path,endpoint_id FROM endpoints WHERE scan_id=?", (scan_id,)).fetchall()
+        endpoint_rows = con.execute("SELECT id,method,url,normalized,path,status,endpoint_id FROM endpoints WHERE scan_id=?", (scan_id,)).fetchall()
         for endpoint_row in endpoint_rows:
-            endpoint_id = endpoint_row[5] or stable_id("endpoint", f"{scan_id}:{endpoint_row[1]}:{endpoint_row[3] or endpoint_row[2]}")
-            con.execute("UPDATE endpoints SET endpoint_id=?,target_id=?,first_seen=COALESCE(first_seen,?),last_seen=COALESCE(last_seen,?) WHERE id=?", (endpoint_id, target_id, started_at or now, finished_at or started_at or now, endpoint_row[0]))
+            endpoint_id = endpoint_row[6] or stable_id("endpoint", f"{scan_id}:{endpoint_row[1]}:{endpoint_row[3] or endpoint_row[2]}")
+            state = "PARAMETERS_IDENTIFIED" if con.execute("SELECT 1 FROM parameters WHERE scan_id=? AND endpoint=? LIMIT 1", (scan_id, endpoint_row[2] or endpoint_row[4] or "")).fetchone() else ("REACHABLE" if int(endpoint_row[5] or 0) > 0 else "DISCOVERED")
+            con.execute("UPDATE endpoints SET endpoint_id=?,target_id=?,state=COALESCE(NULLIF(state,''),?),first_seen=COALESCE(first_seen,?),last_seen=COALESCE(last_seen,?) WHERE id=?", (endpoint_id, target_id, state, started_at or now, finished_at or started_at or now, endpoint_row[0]))
         parameter_rows = con.execute("SELECT id,method,endpoint,name,parameter_id FROM parameters WHERE scan_id=?", (scan_id,)).fetchall()
         for parameter_row in parameter_rows:
             parameter_id = parameter_row[4] or stable_id("parameter", f"{scan_id}:{parameter_row[1]}:{parameter_row[2]}:{parameter_row[3]}")
@@ -399,11 +416,11 @@ def materialize_exchange(con: sqlite3.Connection, scan_id: str, doc: Dict[str, A
         match = con.execute("SELECT endpoint_id FROM endpoints WHERE scan_id=? AND method=? AND (url=? OR path=?) ORDER BY id DESC LIMIT 1", (scan_id, str(doc.get("method") or "GET"), str(doc.get("url") or ""), parsed.path or "/")).fetchone()
         endpoint_id = match[0] if match and match[0] else None
     con.execute(
-        """INSERT INTO requests(request_id,exchange_id,scan_id,project_id,target_id,endpoint_id,method,scheme,host,port,path,query,headers_json,cookies_json,body,timestamp,source,parent_request_id,raw_redacted)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-           ON CONFLICT(request_id) DO UPDATE SET exchange_id=excluded.exchange_id, endpoint_id=excluded.endpoint_id,
+        """INSERT INTO requests(request_id,exchange_id,scan_id,project_id,target_id,endpoint_id,authentication_context_id,method,scheme,host,port,path,query,headers_json,cookies_json,body,timestamp,source,parent_request_id,raw_redacted)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(request_id) DO UPDATE SET exchange_id=excluded.exchange_id, endpoint_id=excluded.endpoint_id, authentication_context_id=excluded.authentication_context_id,
              method=excluded.method,headers_json=excluded.headers_json,cookies_json=excluded.cookies_json,body=excluded.body,source=excluded.source""",
-        (request_id, exchange_id or None, scan_id, project_id, target_id or None, endpoint_id,
+        (request_id, exchange_id or None, scan_id, project_id, target_id or None, endpoint_id, doc.get("authentication_context_id"),
          str(doc.get("method") or "GET"), parsed.scheme, parsed.hostname, parsed.port,
          parsed.path or "/", parsed.query, _json(dict(request_pairs)), _json(request_cookies), raw_body,
          timestamp, str(doc.get("module") or doc.get("source") or ""), doc.get("parent_request_id"), doc.get("raw_request")))
@@ -434,7 +451,8 @@ def materialize_exchange(con: sqlite3.Connection, scan_id: str, doc: Dict[str, A
 
 
 def link_test_records(con: sqlite3.Connection, scan_id: str, tests: Iterable[Dict[str, Any]]) -> None:
-    """Materialize test, payload, control and baseline/test/control links."""
+    """Materialize test, lifecycle, payload, control and exchange links."""
+    from ..engine.test_pipeline import build_pipeline, current_stage
     for index, test in enumerate(tests):
         if not isinstance(test, dict):
             continue
@@ -468,15 +486,19 @@ def link_test_records(con: sqlite3.Connection, scan_id: str, tests: Iterable[Dic
                 response = con.execute("SELECT response_id FROM responses WHERE request_id=?", (row[0],)).fetchone()
                 response_ids.setdefault("observed_exchange_id", response[0] if response else None)
         test_run_id = stable_id("testrun", f"{scan_id}:{test_id}")
+        pipeline = build_pipeline(test)
         con.execute(
-            """INSERT INTO test_runs(test_run_id,test_id,scan_id,baseline_request_id,baseline_response_id,test_request_id,test_response_id,control_request_id,control_response_id,status,result_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(test_run_id) DO UPDATE SET status=excluded.status,result_json=excluded.result_json,
+            """INSERT INTO test_runs(test_run_id,test_id,scan_id,baseline_request_id,baseline_response_id,test_request_id,test_response_id,control_request_id,control_response_id,status,result_json,pipeline_stage,pipeline_json,scope_decision,endpoint,method,parameter,hypothesis_id,authentication_context_id,confidence_rationale)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(test_run_id) DO UPDATE SET status=excluded.status,result_json=excluded.result_json,
                baseline_request_id=excluded.baseline_request_id,baseline_response_id=excluded.baseline_response_id,test_request_id=excluded.test_request_id,test_response_id=excluded.test_response_id,
-               control_request_id=excluded.control_request_id,control_response_id=excluded.control_response_id""",
+               control_request_id=excluded.control_request_id,control_response_id=excluded.control_response_id,pipeline_stage=excluded.pipeline_stage,pipeline_json=excluded.pipeline_json,
+               scope_decision=excluded.scope_decision,endpoint=excluded.endpoint,method=excluded.method,parameter=excluded.parameter,hypothesis_id=excluded.hypothesis_id,authentication_context_id=excluded.authentication_context_id,confidence_rationale=excluded.confidence_rationale""",
             (test_run_id, test_id, scan_id, request_ids.get("baseline_exchange_id"), response_ids.get("baseline_exchange_id"),
              request_ids.get("test_exchange_id") or request_ids.get("cross_account_exchange_id") or request_ids.get("observed_exchange_id"), response_ids.get("test_exchange_id") or response_ids.get("cross_account_exchange_id") or response_ids.get("observed_exchange_id"),
              request_ids.get("control_exchange_id") or request_ids.get("negative_control_exchange_id"), response_ids.get("control_exchange_id") or response_ids.get("negative_control_exchange_id"),
-             str(test.get("status") or "PLANNED"), _json(test)))
+             str(test.get("status") or "PLANNED"), _json(test), current_stage(test), _json(pipeline), str(test.get("scope_decision") or test.get("scope_status") or ("BLOCKED_BY_POLICY" if str(test.get("status") or "").upper() in {"BLOCKED", "SKIPPED"} else "ALLOWED_IN_SCOPE")),
+             str(test.get("endpoint") or ""), str(test.get("method") or "GET"), str(test.get("parameter") or ""), test.get("hypothesis_id"), test.get("authentication_context_id") or test.get("auth_context_id"),
+             str(test.get("confidence_rationale") or test.get("reason") or test.get("independent_verifier") or "")))
         payload_values = test.get("payloads") or test.get("payload")
         if isinstance(payload_values, str): payload_values = [payload_values]
         if isinstance(payload_values, list):

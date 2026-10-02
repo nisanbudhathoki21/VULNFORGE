@@ -22,6 +22,8 @@ vulnforge <SCAN_ID> --database
 vulnforge <SCAN_ID> --dashboard
 vulnforge <SCAN_ID> --report --format json --out reports
 vulnforge dashboard --host 127.0.0.1 --port 8000
+# Remote review only; guarded replay requires VULNFORGE_DASHBOARD_TOKEN
+VULNFORGE_DASHBOARD_TOKEN='secret-from-a-protected-secret-store' vulnforge dashboard --host 0.0.0.0 --port 8000
 ```
 
 Stored scan-ID views are read-only and do not trigger a new scan. `--db PATH` chooses a CLI database. `VULNFORGE_SCAN_DB_PATH` selects the shared default for CLI/dashboard processes.
@@ -62,6 +64,7 @@ All of these commands use the same SQLite store as the dashboard:
 ```bash
 vulnforge requests --method GET --status 200 --host api.example.com --endpoint /api
 vulnforge traffic --finding CONFIRMED
+vulnforge coverage SCAN_ID --format table  # actual selected/skipped/blocked coverage
 vulnforge request 004                 # request plus response detail
 vulnforge finding 12                  # finding → evidence → test → HTTP chain
 vulnforge endpoint 184                # endpoint history and linked findings

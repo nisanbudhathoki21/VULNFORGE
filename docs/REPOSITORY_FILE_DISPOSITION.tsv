@@ -345,4 +345,4 @@ examples/login-flow.example.json	KEEP	Authenticated login flow example configura
 vulnforge/engine/login_flow.py	KEEP	Pre-scan authenticated login flow and CSRF/cookie session helper from Phase 2 overlay.
 vulnforge/tests/test_login_flow.py	KEEP	Unit tests for authenticated login flow, CSRF extraction, and multi-role expansion.
 vulnforge/tests/test_security_headers_registry.py	KEEP	Unit tests for security_headers and cookie_session registry support from Phase 3 overlay.
-vulnforge/engine/class_verifiers.py	KEEP	Deterministic surface and response analyzers backing all 47 vulnerability registry classes.
+vulnforge/engine/class_verifiers.py	KEEP	Deterministic surface and response analyzers for registry classes; most outputs remain observation-only.

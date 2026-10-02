@@ -10,7 +10,7 @@ def test_banner_uses_wordmark_and_narrow_terminal_fallback():
     assert "VULNFORGE" in "\n".join(banner_lines(60))
     wide = banner_lines(100)
     assert wide[0].startswith("██╗")
-    assert "RED TEAM SECURITY ENGINE" in "\n".join(wide)
+    assert "RED TEAM SECURITY ENGINE" not in "\n".join(wide)
     assert max(map(len, banner_lines(79))) <= 30
 
 
@@ -35,7 +35,7 @@ def test_live_dashboard_uses_actual_exchange_and_hides_query_values():
     assert "?x=private" not in rendered
     assert "\x1b]0;evil-title" not in rendered
     assert "200" in rendered and "37 ch" in rendered
-    assert rendered.count("RED TEAM SECURITY ENGINE") == 1
+    assert "RED TEAM SECURITY ENGINE" not in rendered
     assert "No HTTP exchange has been recorded" not in rendered
     assert max(map(len, dashboard.lines(40))) <= 40
 

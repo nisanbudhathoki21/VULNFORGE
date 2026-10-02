@@ -577,7 +577,7 @@
     try {
       const response = await fetch('/api/vf/repeater/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...guardedReplayHeaders() },
         body: JSON.stringify({
           source_exchange_id: state.selectedExchange.exchange_id,
           raw_request: renderRequest(state.selectedExchange),
@@ -900,12 +900,12 @@
   }
 
   async function loadEndpointsPage() {
-    const body=byId('endpoints-table-body');tableMessage(body,7,'Loading endpoint records…');
+    const body=byId('endpoints-table-body');tableMessage(body,8,'Loading endpoint records…');
     await populateScanSelect('endpoints-scan-filter');
     try{const q=new URLSearchParams();const scan=byId('endpoints-scan-filter').value;const search=byId('endpoints-search').value.trim();if(scan)q.set('scan_id',scan);if(search)q.set('search',search);q.set('limit','1000');
-      const rows=await apiGet(`/api/vf/endpoints?${q}`);body.replaceChildren();if(!rows.length){tableMessage(body,7,'No endpoints match these filters.');return;}
-      rows.forEach(item=>{const row=document.createElement('tr');appendCell(row,item.scan_id);appendCell(row,item.method);appendCell(row,item.url,'traffic-url-cell');const code=Number(item.status);const statusCell=appendCell(row,Number.isFinite(code)&&code>0?`HTTP ${code}`:'Not recorded');if(!(Number.isFinite(code)&&code>0))statusCell.title='No HTTP response status is stored for this inventory entry; this does not establish that the endpoint is unavailable.';appendCell(row,item.source);appendCell(row,item.content_type);appendCell(row,item.state_changing?'Yes':'No');body.append(row);});
-    }catch(error){tableMessage(body,7,`Could not load endpoints: ${error.message}`);}
+      const rows=await apiGet(`/api/vf/endpoints?${q}`);body.replaceChildren();if(!rows.length){tableMessage(body,8,'No endpoints match these filters.');return;}
+      rows.forEach(item=>{const row=document.createElement('tr');appendCell(row,item.scan_id);appendCell(row,item.method);appendCell(row,item.url,'traffic-url-cell');appendCell(row,item.state||'DISCOVERED');const code=Number(item.status);const statusCell=appendCell(row,Number.isFinite(code)&&code>0?`HTTP ${code}`:'Not recorded');if(!(Number.isFinite(code)&&code>0))statusCell.title='No HTTP response status is stored for this inventory entry; this does not establish that the endpoint is unavailable.';appendCell(row,item.source);appendCell(row,item.content_type||'');appendCell(row,item.state_changing?'Yes':'No');body.append(row);});
+    }catch(error){tableMessage(body,8,`Could not load endpoints: ${error.message}`);}
   }
 
   async function loadParametersPage() {
@@ -933,13 +933,29 @@
     const body=byId('research-table-body'),query=byId('research-search').value.trim().toLowerCase();
     const rows=state.researchItems.filter(item=>!query||JSON.stringify(item).toLowerCase().includes(query));
     body.replaceChildren();
-    if(!rows.length){tableMessage(body,3,query?'No stored objects match this search.':'No records of this type are stored for the scan.');return;}
+    if(!rows.length){tableMessage(body,4,query?'No stored objects match this search.':'No records of this type are stored for the scan.');return;}
+    const firstExchangeId = value => {
+      if (Array.isArray(value)) { for (const child of value) { const found = firstExchangeId(child); if (found) return found; } }
+      if (value && typeof value === 'object') {
+        for (const [key, child] of Object.entries(value)) {
+          if (String(key).endsWith('exchange_id') && child) return String(child);
+          const found = firstExchangeId(child); if (found) return found;
+        }
+      }
+      return '';
+    };
     rows.forEach((item,index)=>{
       const row=document.createElement('tr');row.tabIndex=0;row.setAttribute('role','button');
       const identity=item.hypothesis_id||item.test_id||item.evidence_id||item.asset_id||item.resource_id||item.actor_id||item.application_id||item.field_path||item.operation_id||item.url||item.endpoint||item.id||`record ${index+1}`;
-      const status=item.status||item.state||item.type||item.category||item.asset_type||item.object_type||'stored record';
+      const status=item.result_status||item.status||item.state||item.type||item.category||item.asset_type||item.object_type||'stored record';
       const summary=item.reason||item.summary||item.title||item.description||item.url||item.endpoint||item.message||item.name||item.field_path||'Open structured record';
       appendCell(row,identity);appendCell(row,status);appendCell(row,summary);
+      const action=appendCell(row,'');
+      const sourceId=firstExchangeId(item);
+      if (sourceId && ['CANDIDATE','REPRODUCED','UNCONFIRMED','INCONCLUSIVE','OBSERVED','SIGNAL'].includes(String(status).toUpperCase())) {
+        const button=document.createElement('button');button.className='text-button';button.textContent='Retest';button.title='Stage the saved source exchange in Guarded Repeater';
+        button.addEventListener('click',async event=>{event.stopPropagation();try{const exchange=await apiGet(`/api/vf/traffic/${encodeURIComponent(sourceId)}`);stageExchangeIntoRepeater(exchange,'Unconfirmed test source staged. Edit the request or payload, then send a guarded retest.');}catch(error){byId('research-detail').textContent=`Could not stage the source exchange: ${error.message}`;}});action.append(button);
+      } else action.textContent='—';
       const select=()=>{byId('research-detail').textContent=JSON.stringify(item,null,2);};
       row.addEventListener('click',select);row.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();select();}});body.append(row);
     });
@@ -947,10 +963,10 @@
 
   async function loadResearchPage(reset=true) {
     const select=byId('research-scan-select'),kind=byId('research-kind-select').value;
-    const body=byId('research-table-body');if(reset){state.researchOffset=0;state.researchItems=[];state.researchHasMore=false;byId('research-more').hidden=true;tableMessage(body,3,'Loading stored research records…');}
+    const body=byId('research-table-body');if(reset){state.researchOffset=0;state.researchItems=[];state.researchHasMore=false;byId('research-more').hidden=true;tableMessage(body,4,'Loading stored research records…');}
     try{
       const scans=await apiGet('/api/vf/scans');select.replaceChildren();
-      if(!scans.length){select.append(new Option('No saved scans',''));state.researchItems=[];tableMessage(body,3,'No scan is available.');return;}
+      if(!scans.length){select.append(new Option('No saved scans',''));state.researchItems=[];tableMessage(body,4,'No scan is available.');return;}
       scans.forEach(scan=>select.append(new Option(`${scan.target||'Unknown target'} · ${scan.scan_id}`,scan.scan_id)));
       const selected=scans.some(scan=>scan.scan_id===state.researchScanId)?state.researchScanId:
         (scans.some(scan=>scan.scan_id===state.activeScanId)?state.activeScanId:scans[0].scan_id);
@@ -962,7 +978,7 @@
       byId('research-summary').textContent=`${state.researchItems.length} stored ${kind} record(s) loaded · scan ${selected}${state.researchHasMore?' · more records available':''}`;
       if(reset)byId('research-detail').textContent='Select a stored record to inspect its JSON.';
       renderResearchRows();
-    }catch(error){state.researchItems=[];state.researchHasMore=false;byId('research-more').hidden=true;byId('research-summary').textContent=`Research data unavailable: ${error.message}`;tableMessage(body,3,`Could not load stored research objects: ${error.message}`);}
+    }catch(error){state.researchItems=[];state.researchHasMore=false;byId('research-more').hidden=true;byId('research-summary').textContent=`Research data unavailable: ${error.message}`;tableMessage(body,4,`Could not load stored research objects: ${error.message}`);}
   }
 
   async function loadTechnologiesPage() {
@@ -993,7 +1009,32 @@
     try {
       const result = await apiGet(`/api/vf/findings/${encodeURIComponent(findingId)}`);
       output.textContent = JSON.stringify(result, null, 2);
-    } catch (error) { output.textContent = `Could not load finding detail: ${error.message}`; }
+      const actions = byId('finding-actions');
+      if (actions) {
+        actions.replaceChildren();
+        const status = String(result.finding?.status || '').toUpperCase();
+        const source = (result.evidence_chain || []).flatMap(item => Array.isArray(item.exchanges) ? item.exchanges : []).find(item => item && item.exchange_id);
+        if (source && !['VERIFIED', 'CONFIRMED'].includes(status)) {
+          const button = document.createElement('button');
+          button.className = 'button button-secondary';
+          button.textContent = 'Retest unconfirmed source in Guarded Repeater';
+          button.title = 'Stages the saved source exchange; sending remains subject to dashboard authentication, scope, rate, budget, and consent controls.';
+          button.addEventListener('click', async () => {
+            try {
+              const exchange = await apiGet(`/api/vf/traffic/${encodeURIComponent(source.exchange_id)}`);
+              stageExchangeIntoRepeater(exchange, 'Unconfirmed evidence source staged. Edit the payload or request, then send a guarded retest.');
+            } catch (error) { output.textContent += `\n\nCould not stage source exchange: ${error.message}`; }
+          });
+          actions.append(button);
+          actions.hidden = false;
+        } else {
+          actions.hidden = true;
+        }
+      }
+    } catch (error) {
+      output.textContent = `Could not load finding detail: ${error.message}`;
+      byId('finding-actions')?.setAttribute('hidden', '');
+    }
   }
 
   async function loadEvidencePage() {
@@ -1197,6 +1238,11 @@
     }
   }
 
+  function guardedReplayHeaders() {
+    const token = byId('repeater-token')?.value || '';
+    return token ? { 'X-VulnForge-Dashboard-Token': token } : {};
+  }
+
   async function sendRepeaterRequest() {
     const button = byId('btn-repeater-send');
     const output = byId('repeater-raw-response');
@@ -1209,7 +1255,7 @@
     try {
       const response = await fetch('/api/vf/repeater/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...guardedReplayHeaders() },
         body: JSON.stringify({ raw_request: requestText, source_exchange_id: sourceExchangeId,
           authorized: byId('repeater-authorized').checked,
           confirm_state_change: byId('repeater-state-change').checked })
@@ -1588,20 +1634,25 @@
     }
   }
 
+  function stageExchangeIntoRepeater(exchange, note = '') {
+    if (!exchange) return;
+    state.repeaterSourceExchangeId = exchange.exchange_id;
+    byId('repeater-raw-request').value = renderRequest(exchange);
+    byId('repeater-raw-response').textContent = note || 'Captured response shown in HTTP traffic; this editor is ready for a scoped replay or mutation.';
+    byId('repeater-source-meta').textContent = `Source ${exchange.exchange_id} · scan ${exchange.scan_id || state.trafficScanId} · original saved scope`;
+    byId('repeater-authorized').checked = false;
+    byId('repeater-state-change').checked = false;
+    byId('repeater-status').textContent = 'Ready';
+    navigate('repeater');
+  }
+
   async function loadSelectedExchangeIntoRepeater() {
     if (!state.trafficExchangeId) return;
     try {
       const response = await fetch(`/api/vf/traffic/${encodeURIComponent(state.trafficExchangeId)}`, { headers: { Accept: 'application/json' } });
       const exchange = await response.json();
       if (!response.ok) throw new Error(exchange.detail || `Request failed (${response.status})`);
-      state.repeaterSourceExchangeId = exchange.exchange_id;
-      byId('repeater-raw-request').value = renderRequest(exchange);
-      byId('repeater-raw-response').textContent = 'Captured response shown in HTTP traffic; this editor is ready for a scoped replay or mutation.';
-      byId('repeater-source-meta').textContent = `Source ${exchange.exchange_id} · scan ${exchange.scan_id || state.trafficScanId} · original saved scope`;
-      byId('repeater-authorized').checked = false;
-      byId('repeater-state-change').checked = false;
-      byId('repeater-status').textContent = 'Ready';
-      navigate('repeater');
+      stageExchangeIntoRepeater(exchange);
     } catch (error) {
       byId('traffic-request-meta').textContent = `Could not prepare Repeater request: ${error.message}`;
     }

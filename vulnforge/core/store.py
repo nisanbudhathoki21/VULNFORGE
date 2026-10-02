@@ -378,16 +378,42 @@ class Store:
                 con.execute("INSERT OR REPLACE INTO ports(port_id,host_id,port,scheme,service,source) VALUES (?,?,?,?,?,?)", (stable_id("port", f"{host_id}:{parsed_target.port or (443 if parsed_target.scheme == 'https' else 80)}"), host_id, parsed_target.port or (443 if parsed_target.scheme == "https" else 80), parsed_target.scheme, "https" if parsed_target.scheme == "https" else "http", "target"))
             final_status = "aborted" if scan.aborted else ("partial" if ctx.stop_reason else "completed")
             con.execute("INSERT OR REPLACE INTO scan_runs(scan_id,project_id,target_id,profile,status,started_at,finished_at,statistics_json) VALUES (?,?,?,?,?,?,?,?)", (ctx.scan_id, "project-default", target_id, ctx.config.profile_name, final_status, ctx.stats.started_at, ctx.stats.finished_at, json.dumps(ctx.stats.to_dict())))
+            # Persist identity labels and redacted auth context metadata only;
+            # passwords, tokens, cookies, and API keys never enter this table.
+            identity_contexts = {}
+            for label, identity in (getattr(ctx.config, "auth_data", {}) or {}).get("identities", {}).items():
+                identity = identity if isinstance(identity, dict) else {}
+                auth_id = stable_id("auth", f"{ctx.scan_id}:{label}")
+                redacted_headers = redact_any({"headers": identity.get("headers", {}), "role": identity.get("role", ""), "tenant": identity.get("tenant", "")})
+                con.execute("INSERT OR REPLACE INTO authentication_contexts(authentication_context_id,scan_id,label,actor,redacted_headers_json,created_at) VALUES (?,?,?,?,?,?)", (auth_id, ctx.scan_id, str(label), str(identity.get("actor") or identity.get("role") or label), json.dumps(redacted_headers), now))
+                con.execute("INSERT OR REPLACE INTO sessions(session_id,authentication_context_id,label,state,created_at) VALUES (?,?,?,?,?)", (stable_id("session", auth_id), auth_id, str(label), "configured", now))
+                identity_contexts[str(label)] = auth_id
             endpoint_ids = {}
+            tests_for_state = list(getattr(ctx, "tests", []) or [])
+            findings_for_state = list(getattr(ctx, "findings", []) or [])
+            def _matches(value, endpoint):
+                text = str(value or "")
+                return text and (text == endpoint.url or text == endpoint.path or endpoint.path in text or endpoint.url in text)
             for ep in ctx.endpoints.values():
+                matching_tests = [item for item in tests_for_state if isinstance(item, dict) and _matches(item.get("endpoint"), ep)]
+                matching_findings = [item for item in findings_for_state if _matches(getattr(item, "endpoint", ""), ep)]
+                if ep.scope_status == "OUT_OF_SCOPE":
+                    ep.state, ep.state_reason = "UNTESTABLE", "Endpoint was discovered but excluded by the active scope policy."
+                elif any(str(getattr(item, "status", "")).upper() in {"VERIFIED", "CONFIRMED"} for item in matching_findings):
+                    ep.state, ep.state_reason = "CONFIRMED_VULNERABILITY", "A persisted finding reached the confirmed/verified state for this endpoint."
+                elif matching_tests:
+                    ep.state, ep.state_reason = "TESTED", "At least one bounded test record is linked to this endpoint."
+                elif int(ep.status or 0) in {401, 403}:
+                    ep.state, ep.state_reason = "AUTHENTICATION_REQUIRED", f"HTTP {ep.status} prevented unauthenticated inventory access."
                 endpoint_id = stable_id("endpoint", f"{ctx.scan_id}:{ep.method}:{ep.normalized}")
                 endpoint_ids[ep.key()] = endpoint_id
                 ep_doc = redact_any(ep.to_dict())
                 ep_doc["endpoint_id"] = endpoint_id
+                ep_doc["endpoint_id"] = endpoint_id
                 con.execute(
-                    "INSERT INTO endpoints (scan_id,endpoint_id,target_id,method,url,normalized,path,status,source,state_changing,auth_hint,content_type,first_seen,last_seen,data_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO endpoints (scan_id,endpoint_id,target_id,method,url,normalized,path,status,source,state_changing,auth_hint,content_type,state,state_reason,first_seen,last_seen,data_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (ctx.scan_id, endpoint_id, target_id, ep.method, redact_any(ep.url), redact_any(ep.normalized), redact_any(ep.path), ep.status,
-                     ep.source, int(ep.state_changing), ep.auth_hint, ep.content_type, ep.discovered_at or now, now,
+                     ep.source, int(ep.state_changing), ep.auth_hint, ep.content_type, getattr(ep, "state", "DISCOVERED"), getattr(ep, "state_reason", ""), ep.discovered_at or now, now,
                      json.dumps(ep_doc)))
             for p in ctx.parameters.values():
                 endpoint_id = endpoint_ids.get(f"{p.method}:{p.endpoint_url}")
@@ -626,7 +652,7 @@ class Store:
             item = dict(row)
             endpoint_id = item.get("endpoint_id")
             requests = con.execute("SELECT request_id,exchange_id,method,host,path,query,source,timestamp FROM requests WHERE endpoint_id=? ORDER BY timestamp DESC", (endpoint_id,)).fetchall() if endpoint_id else []
-            tests = con.execute("SELECT test_run_id,test_id,status FROM test_runs WHERE scan_id=? AND (result_json LIKE ? OR result_json LIKE ?) ORDER BY rowid DESC", (item.get("scan_id"), f"%{item.get('path','')}%", f"%{item.get('url','')}%" )).fetchall()
+            tests = con.execute("SELECT test_run_id,test_id,status,pipeline_stage,scope_decision,endpoint,method,parameter,confidence_rationale FROM test_runs WHERE scan_id=? AND (result_json LIKE ? OR result_json LIKE ?) ORDER BY rowid DESC", (item.get("scan_id"), f"%{item.get('path','')}%", f"%{item.get('url','')}%" )).fetchall()
             findings = con.execute("SELECT finding_id,title,status,severity FROM findings WHERE scan_id=? AND endpoint LIKE ?", (item.get("scan_id"), f"%{item.get('path','')}%" )).fetchall()
             parameter_count = con.execute("SELECT COUNT(*) FROM parameters WHERE scan_id=? AND endpoint_id=?", (item.get("scan_id"), endpoint_id)).fetchone()[0] if endpoint_id else 0
         from urllib.parse import urlsplit
@@ -660,6 +686,30 @@ class Store:
         with self._conn() as con:
             return record_audit_event(con, action=action, object_type=object_type, object_id=object_id, scan_id=scan_id, result=result, metadata=metadata)
 
+    def record_tool_observation(self, scan_id: str, tool_name: str, observation: Any,
+                                *, endpoint_id: str = "", status: str = "OBSERVED") -> str:
+        """Store an external-tool result as an observation, never a finding."""
+        observation_id = stable_id("tool", f"{scan_id}:{tool_name}:{time.time_ns()}")
+        with self._conn() as con:
+            con.execute("INSERT INTO tool_observations(tool_observation_id,scan_id,tool_name,observed_at,endpoint_id,status,output_json) VALUES (?,?,?,?,?,?,?)", (observation_id, scan_id, str(tool_name), time.time(), endpoint_id or None, str(status), json.dumps(redact_any(observation), ensure_ascii=False, default=str)))
+            record_audit_event(con, action="tool_observation_recorded", object_type="tool_observation", object_id=observation_id, scan_id=scan_id, metadata={"tool": str(tool_name), "status": str(status)})
+        return observation_id
+
+    def record_browser_event(self, scan_id: str, event_type: str, data: Any,
+                             *, url: str = "") -> str:
+        event_id = stable_id("browser", f"{scan_id}:{event_type}:{time.time_ns()}")
+        with self._conn() as con:
+            con.execute("INSERT INTO browser_events(browser_event_id,scan_id,event_type,timestamp,url,data_json) VALUES (?,?,?,?,?,?)", (event_id, scan_id, str(event_type), time.time(), redact_any(url), json.dumps(redact_any(data), ensure_ascii=False, default=str)))
+            record_audit_event(con, action="browser_event_recorded", object_type="browser_event", object_id=event_id, scan_id=scan_id, metadata={"event_type": str(event_type)})
+        return event_id
+
+    def list_tool_observations(self, scan_id: str = "", limit: int = 500) -> List[Dict[str, Any]]:
+        with self._conn() as con:
+            query = "SELECT * FROM tool_observations" + (" WHERE scan_id=?" if scan_id else "") + " ORDER BY observed_at DESC LIMIT ?"
+            values = ([scan_id] if scan_id else []) + [max(1, min(int(limit), 1000))]
+            rows = con.execute(query, values).fetchall()
+        return [dict(row) for row in rows]
+
     # ------------------------------------------------------------------
     def list_scans(self) -> List[Dict[str, Any]]:
         with self._conn() as con:
@@ -688,7 +738,7 @@ class Store:
         if search: clauses.append("lower(e.url) LIKE ?"); values.append("%"+search.lower()+"%")
         where=(" WHERE "+" AND ".join(clauses)) if clauses else ""
         with self._conn() as con:
-            rows=con.execute("SELECT e.id,e.endpoint_id,e.scan_id,s.target,e.method,e.url,e.path,e.status,e.source,e.state_changing,e.auth_hint,e.content_type FROM endpoints e JOIN scans s ON s.scan_id=e.scan_id"+where+" ORDER BY e.id DESC LIMIT ? OFFSET ?",values+[max(1,min(int(limit),1000)),max(0,int(offset))]).fetchall()
+            rows=con.execute("SELECT e.id,e.endpoint_id,e.scan_id,s.target,e.method,e.url,e.path,e.status,e.source,e.state_changing,e.auth_hint,e.content_type,e.state,e.state_reason FROM endpoints e JOIN scans s ON s.scan_id=e.scan_id"+where+" ORDER BY e.id DESC LIMIT ? OFFSET ?",values+[max(1,min(int(limit),1000)),max(0,int(offset))]).fetchall()
         return [dict(row) for row in rows]
 
     def list_technologies(self, scan_id: str = "", search: str = "", limit: int = 500, offset: int = 0) -> List[Dict[str, Any]]:
@@ -811,6 +861,7 @@ class Store:
             "http_history": history,
             "exchanges": exchanges,
             "evidence_records": self.list_evidence(scan_id=scan_id,limit=1000,offset=0),
+            "tool_observations": self.list_tool_observations(scan_id,limit=1000),
             "events": self.list_scan_events(scan_id,limit=10000),
         }
 
@@ -853,6 +904,7 @@ class Store:
         with self._conn() as con:
             con.execute("UPDATE scan_documents SET report_json=? WHERE scan_id=?",
                         (json.dumps(redact_any(report),ensure_ascii=False),scan_id))
+        self.record_browser_event(scan_id, "capture_import", item)
         return {"capture_import":item,"workflow_observations":workflow}
 
     def get_evidence_chain(self, finding_id: str) -> List[Dict[str, Any]]:
@@ -973,6 +1025,6 @@ class Store:
     def get_endpoints(self, scan_id: str) -> List[Dict[str, Any]]:
         with self._conn() as con:
             rows = con.execute(
-                "SELECT method,url,path,status,source,state_changing FROM endpoints WHERE scan_id=?",
+                "SELECT method,url,path,status,source,state_changing,state,state_reason FROM endpoints WHERE scan_id=?",
                 (scan_id,)).fetchall()
         return [dict(r) for r in rows]

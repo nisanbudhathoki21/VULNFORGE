@@ -236,6 +236,8 @@ class Endpoint:
     discovered_at: float = field(default_factory=time.time)
     scope_status: str = "UNKNOWN"
     scope_reason: str = ""
+    state: str = "DISCOVERED"
+    state_reason: str = ""
     evidence_ids: List[str] = field(default_factory=list)
     def key(self) -> str: return f"{self.method}:{self.normalized}"
     def to_dict(self) -> Dict[str, Any]: return asdict(self)

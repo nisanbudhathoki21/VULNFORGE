@@ -1,11 +1,9 @@
-"""Comprehensive, evidence-backed verifiers and surface analyzers for all 47 registry classes.
+"""Conservative surface and response analyzers for registry classes.
 
-Every class in VULNERABILITY_CLASSES is backed by either:
-- A dedicated active verifier (`bola`, `cors`, `open_redirect`, `sqli`),
-- A dedicated passive plugin (`security_headers`, `cookie_session`, `information_disclosure`), or
-- A deterministic surface & response analyzer in this module that inspects captured
-  HTTP exchanges, forms, parameters, JavaScript assets, API schemas, cookies, and
-  headers without fabricating findings or sending destructive traffic.
+Every class has an implementation-backed observation path, but this module
+is not a claim of full vulnerability coverage. Only dedicated verifier
+contracts may promote evidence to a confirmed finding; all other signals stay
+observation-only and are reported with their limitations.
 """
 from __future__ import annotations
 

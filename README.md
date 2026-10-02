@@ -128,6 +128,33 @@ Sensitive headers and cookie values remain redacted in normal display and
 exports. HTTP differences are observations only and are never promoted to a
 confirmed finding without the configured validation contract.
 
+Every persisted test also carries the canonical lifecycle ledger:
+`DISCOVERY → OBSERVATION → HYPOTHESIS → TEST PLANNING → BASELINE → CONTROL →
+DIFFERENTIAL TEST → REPRODUCTION → IMPACT VALIDATION → FINDING DECISION`.
+Missing controls, reproduction, or bounded impact are stored as explicit
+`UNTESTABLE`, `KILLED`, `SKIPPED`, or non-confirming states rather than being
+inferred from a response. Endpoint inventory records expose states such as
+`DISCOVERED`, `REACHABLE`, `AUTHENTICATION_REQUIRED`, `PARAMETERS_IDENTIFIED`,
+`TESTED`, `CONFIRMED_VULNERABILITY`, and `UNTESTABLE`, together with a reason.
+Use `vulnforge coverage SCAN_ID` to review actual run coverage and limitations.
+
+The dashboard can be exposed for remote read-only review, but active replay is
+not public by default. Start it on a LAN or behind an authenticated reverse
+proxy, and configure a separate dashboard token before allowing guarded replay:
+
+```bash
+python -m vulnforge dashboard --host 0.0.0.0 --port 8000
+export VULNFORGE_DASHBOARD_TOKEN='use-a-secret-outside-the-repository'
+```
+
+The browser checkbox is consent confirmation, not authentication. Remote
+`/api/vf/repeater/send` requests are rejected unless the token is supplied;
+local loopback replay remains available for the operator. The Findings and
+Research views can stage an `UNCONFIRMED` evidence source in Guarded Repeater,
+where the request, response, payload mutation, parent exchange, and audit trail
+remain linked. Burp-compatible raw/HAR exports are supported, but direct live
+control of Burp Repeater requires a separate Burp extension/API integration.
+
 The web Traffic workbench provides filterable history, request/response raw,
 header, query, cookie, body, JSON, authentication, timing, history, tests,
 and evidence views. Stored reports can also be exported as JSON, Markdown,

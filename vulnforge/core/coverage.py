@@ -1,21 +1,117 @@
-"""Conservative, implementation-backed scan coverage matrix."""
+"""Evidence-backed coverage reporting.
 
-def build_coverage(ctx):
-    tests=getattr(ctx,"tests",[])
-    plans=getattr(ctx,"test_plan",[])
-    executed=[t for t in tests if t.get("status") in ("VERIFIED","CANDIDATE")]
-    blocked=bool(plans) and not executed
-    authz="PARTIAL" if executed else ("BLOCKED" if blocked else "NOT_TESTED")
+Coverage is a record of what the current run actually selected, observed,
+executed, blocked, or left untestable. It never infers coverage from the
+existence of a scanner class alone.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, Iterable, List
+
+
+def _status(row: Dict[str, Any]) -> str:
+    status = str(row.get("status") or "NOT_TESTED").upper()
+    aliases = {
+        "VERIFIED": "CONFIRMED",
+        "CANDIDATE": "UNCONFIRMED",
+        "INCONCLUSIVE": "UNCONFIRMED",
+        "OBSERVATION_ONLY": "UNCONFIRMED",
+        "TESTED_CLEAN": "KILLED",
+        "NO_TEST_SURFACE": "UNTESTABLE",
+        "NOT_SELECTED": "SKIPPED",
+    }
+    return aliases.get(status, status)
+
+
+def _row_from_matrix(row: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(row)
+    result.setdefault("category", {
+        "bola": "Object-level authorization",
+        "bfla": "Function-level authorization",
+        "tenant_isolation": "Tenant isolation",
+        "xss": "Cross-site scripting",
+        "sqli": "SQL injection",
+        "ssrf": "SSRF indicators",
+        "open_redirect": "Open redirect",
+        "security_headers": "Security headers",
+        "cookie_session": "Cookie/session controls",
+    }.get(str(row.get("class_id")), row.get("name") or row.get("class_id") or "Unknown"))
+    # Keep the historical human-facing BLOCKED label for a configured
+    # authorization plan that was prevented before its first request. The
+    # canonical class result remains SKIPPED in ``final_status``.
+    if row.get("class_id") == "bola" and row.get("status") == "SKIPPED" and row.get("planned", 0):
+        result["status"] = "BLOCKED"
+    result["final_status"] = _status(row)
+    result["evidence_backed"] = bool(
+        row.get("verified") or row.get("executed") or row.get("hypotheses") or row.get("test_surface_count")
+    )
+    result.setdefault("notes", row.get("reason") or "No execution note was recorded.")
+    return result
+
+
+def build_coverage(ctx) -> List[Dict[str, Any]]:
+    """Build the implementation-backed vulnerability and discovery matrix."""
+    matrix = list(getattr(ctx, "vulnerability_matrix", []) or [])
+    rows = [_row_from_matrix(row) for row in matrix if isinstance(row, dict)]
+    if rows:
+        return rows
+
+    # A scan may be interrupted before the vulnerability matrix stage. Return
+    # honest discovery coverage instead of fabricating vulnerability results.
+    endpoints = getattr(ctx, "endpoints", {}) or {}
+    parameters = getattr(ctx, "parameters", {}) or {}
+    exchanges = list(getattr(getattr(ctx, "requester", None), "exchanges", []) or [])
     return [
-      {"category":"DNS / target addresses","status":"PARTIAL","notes":"System-resolver A/AAAA addresses only; no passive subdomain sources or full DNS record set."},
-      {"category":"Web services / redirects","status":"PARTIAL","notes":"Fetched HTTP(S) responses receive conservative live-state labels; failed transport is UNKNOWN except explicit timeout/refusal. No port sweep or virtual-host discovery."},
-      {"category":"TLS certificate intelligence","status":"UNSUPPORTED","notes":"Certificate details are not exposed by the current transport; no certificate claims are made."},
-      {"category":"WAF / CDN / technology fingerprints","status":"PARTIAL","notes":"Passive rules over fetched headers, cookies, HTML, and assets; not a comprehensive multi-source fingerprint database."},
-      {"category":"Static application crawling","status":"PARTIAL","notes":"Bounded HTTP crawl, HTML links/forms, query parameters, and discovered JavaScript; no browser-rendered SPA execution."},
-      {"category":"API / OpenAPI discovery","status":"PARTIAL","notes":"Explicitly linked JSON OpenAPI 3.x / Swagger 2.0 documents yield bounded declared operation metadata; YAML, full schema semantics, and operation reachability are not tested."},
-      {"category":"Authentication / MFA","status":"PARTIAL","notes":"Text and route signals only; no MFA or authentication workflow validation."},
-      {"category":"Object-level authorization","status":authz,"notes":"Only the explicitly configured, read-only two-identity comparison is supported; all other authorization cases remain untested."},
-      {"category":"XSS / injection / SSRF / traversal / file upload","status":"NOT_TESTED","notes":"No controlled verification modules are implemented for these classes."},
-      {"category":"CORS / CSRF / JWT / OAuth / WebSocket","status":"NOT_TESTED","notes":"These vulnerability classes are not actively tested in this build."},
-      {"category":"Business logic / race conditions","status":"UNSUPPORTED","notes":"No stateful workflow or concurrency testing engine is implemented."},
+        {
+            "class_id": "discovery",
+            "category": "Endpoint discovery",
+            "name": "Endpoint discovery",
+            "selected": True,
+            "supported": True,
+            "status": "PARTIAL" if endpoints else "NOT_TESTED",
+            "final_status": "UNCONFIRMED" if endpoints else "UNTESTABLE",
+            "evidence_backed": bool(endpoints),
+            "test_surface_count": len(endpoints),
+            "notes": "Persisted endpoint inventory from the current scan.",
+        },
+        {
+            "class_id": "parameters",
+            "category": "Parameter inventory",
+            "name": "Parameter inventory",
+            "selected": True,
+            "supported": True,
+            "status": "PARTIAL" if parameters else "NOT_TESTED",
+            "final_status": "UNCONFIRMED" if parameters else "UNTESTABLE",
+            "evidence_backed": bool(parameters),
+            "test_surface_count": len(parameters),
+            "notes": "Persisted parameter records from observed requests and forms.",
+        },
+        {
+            "class_id": "http-traffic",
+            "category": "HTTP traffic capture",
+            "name": "HTTP traffic capture",
+            "selected": True,
+            "supported": True,
+            "status": "PARTIAL" if exchanges else "NOT_TESTED",
+            "final_status": "UNCONFIRMED" if exchanges else "UNTESTABLE",
+            "evidence_backed": bool(exchanges),
+            "test_surface_count": len(exchanges),
+            "notes": "Normalized request and response records captured by the central requester.",
+        },
     ]
+
+
+def coverage_summary(ctx) -> Dict[str, Any]:
+    rows = build_coverage(ctx)
+    counts: Dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("final_status") or row.get("status") or "NOT_TESTED")
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        "total": len(rows),
+        "counts": counts,
+        "selected": sum(1 for row in rows if row.get("selected")),
+        "supported": sum(1 for row in rows if row.get("supported")),
+        "evidence_backed": sum(1 for row in rows if row.get("evidence_backed")),
+        "rows": rows,
+    }

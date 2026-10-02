@@ -59,6 +59,8 @@ def make_endpoint(url: str, method: str = "GET", source: str = "crawl",
                   source=source, depth=depth)
     if exchange is not None:
         ep.status = exchange.status
+        ep.state = "REACHABLE" if exchange.ok else "UNTESTABLE"
+        ep.state_reason = "Observed a completed in-scope HTTP exchange." if exchange.ok else (exchange.error or "No usable response was recorded.")
         ep.content_type = exchange.header("content-type")
         ep.response_length = exchange.body_length
         ep.evidence_ids = [exchange.exchange_id]
@@ -71,6 +73,9 @@ def make_endpoint(url: str, method: str = "GET", source: str = "crawl",
     ep.state_changing = ep.method in _STATE_METHODS
     if _AUTH_PATH.search(ep.path):
         ep.auth_hint = "login-surface"
+    if ep.params:
+        ep.state = "PARAMETERS_IDENTIFIED"
+        ep.state_reason = "One or more request parameters were observed on the endpoint."
     return ep
 
 
