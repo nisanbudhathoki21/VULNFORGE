@@ -1,0 +1,5 @@
+# VulnForge IP/CIDR scope bounds — loopback-only demonstration values.
+# The CLI still requires a separate, explicitly supplied target and --lab.
+# This file limits that one local target; it does NOT launch scans for each line.
+127.0.0.1/32
+::1/128

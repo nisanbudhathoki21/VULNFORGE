@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>VULNFORGE — Security Workbench</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#dashboard" data-route="dashboard" aria-label="VULNFORGE dashboard">
+        <span class="brand-mark" aria-hidden="true">VF</span>
+        <span class="brand-name">VULNFORGE</span>
+      </a>
+      <div class="sidebar-caption">WORKSPACE</div>
+      <nav class="primary-nav">
+        <button class="nav-link is-active" data-route="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
+        <button class="nav-link nav-link-primary" data-route="new-scan"><span class="nav-icon">＋</span><span>New scan</span></button>
+        <div class="nav-section-label">SCANNING</div>
+        <button class="nav-link" data-route="scans"><span class="nav-icon">◷</span><span>Scans &amp; history</span></button>
+        <div class="nav-section-label">DISCOVERY</div>
+        <button class="nav-link" data-route="targets"><span class="nav-icon">◎</span><span>Targets</span></button>
+        <button class="nav-link" data-route="endpoints"><span class="nav-icon">⌘</span><span>Endpoints</span></button>
+        <button class="nav-link" data-route="parameters"><span class="nav-icon">◌</span><span>Parameters</span></button>
+        <button class="nav-link" data-route="research"><span class="nav-icon">⇢</span><span>Research model</span></button>
+        <button class="nav-link" data-route="technologies"><span class="nav-icon">▦</span><span>Technologies</span></button>
+        <div class="nav-section-label">SECURITY</div>
+        <button class="nav-link" data-route="findings"><span class="nav-icon">◇</span><span>Findings</span></button>
+        <button class="nav-link" data-route="verified"><span class="nav-icon">✓</span><span>Verified findings</span></button>
+        <button class="nav-link" data-route="evidence"><span class="nav-icon">▤</span><span>Evidence</span></button>
+        <div class="nav-section-label">REPORTING</div>
+        <button class="nav-link" data-route="reports"><span class="nav-icon">▧</span><span>Reports</span></button>
+        <div class="nav-section-label">TOOLS</div>
+        <button class="nav-link" data-route="traffic"><span class="nav-icon">⇄</span><span>HTTP traffic</span></button>
+        <button class="nav-link" data-route="repeater"><span class="nav-icon">↗</span><span>Repeater</span></button>
+        <button class="nav-link" data-route="console"><span class="nav-icon">&gt;_</span><span>Live console</span></button>
+        <button class="nav-link" data-route="events"><span class="nav-icon">◷</span><span>Scan events</span></button>
+        <button class="nav-link" data-route="utilities"><span class="nav-icon">⌗</span><span>Utilities</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="nav-link" data-route="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
+        <div class="local-note"><span class="status-dot"></span><span>Local workspace</span></div>
+      </div>
+    </aside>
+
+    <button class="sidebar-scrim" id="sidebar-scrim" aria-label="Close navigation"></button>
+    <div class="main-column">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button menu-toggle" id="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
+          <div class="burp-menubar" aria-label="Workspace menu">
+            <button type="button" class="menubar-item" data-route="dashboard">VulnForge</button>
+            <button type="button" class="menubar-item" data-route="scans">Project</button>
+            <button type="button" class="menubar-item" data-route="targets">Target</button>
+            <button type="button" class="menubar-item" data-route="traffic">Proxy</button>
+            <button type="button" class="menubar-item" data-route="repeater">Repeater</button>
+            <button type="button" class="menubar-item" data-route="reports">Reports</button>
+          </div>
+        </div>
+        <div class="breadcrumb"><span>VULNFORGE Professional · Security Workbench</span><span class="crumb-separator">—</span><strong id="page-title">Dashboard</strong></div>
+        <div class="topbar-actions">
+          <span class="top-metric-pill" title="Stored scans in SQLite">Scans: <b data-metric="scans">—</b></span>
+          <span class="top-metric-pill" title="Verified findings">Verified: <b data-metric="verified">—</b></span>
+          <span class="connection-state"><i></i> SQLite Connected</span>
+          <button type="button" class="menubar-settings" data-route="settings">⚙ Settings</button>
+        </div>
+      </header>
+      <nav class="burp-toolstrip" aria-label="Workbench tool tabs">
+        <button type="button" class="workbench-tab is-active" data-route="dashboard">Dashboard</button>
+        <button type="button" class="workbench-tab" data-route="targets">Target</button>
+        <button type="button" class="workbench-tab" data-route="traffic">Proxy · HTTP history</button>
+        <button type="button" class="workbench-tab" data-route="endpoints">Site map</button>
+        <button type="button" class="workbench-tab" data-route="repeater">Repeater</button>
+        <button type="button" class="workbench-tab" data-route="findings">Findings</button>
+        <button type="button" class="workbench-tab" data-route="verified">Verified</button>
+        <button type="button" class="workbench-tab" data-route="evidence">Evidence</button>
+        <button type="button" class="workbench-tab" data-route="parameters">Parameters</button>
+        <button type="button" class="workbench-tab" data-route="research">Research model</button>
+        <button type="button" class="workbench-tab" data-route="technologies">Technologies</button>
+        <button type="button" class="workbench-tab" data-route="console">Logger · Console</button>
+        <button type="button" class="workbench-tab" data-route="events">Scan events</button>
+        <button type="button" class="workbench-tab" data-route="utilities">Decoder · Utilities</button>
+        <button type="button" class="workbench-tab" data-route="reports">Reports</button>
+        <button type="button" class="workbench-tab workbench-tab-cta" data-route="new-scan">＋ New scan</button>
+      </nav>
+
+      <main class="page-content">
+        <section class="view is-visible" id="view-dashboard" data-view="dashboard">
+          <div class="burp-workbench-shell">
+            <!-- Left Column: Target site map tree + Issues + Search -->
+            <aside class="burp-left-dock" aria-label="Target site map and issues">
+              <div class="burp-dock-header">
+                <span>Target</span>
+                <span id="workbench-endpoint-count" class="state-chip">0</span>
+              </div>
+              <div class="burp-sitemap-section">
+                <div class="burp-root-node">
+                  <span class="tree-caret">▾</span>
+                  <span class="tree-globe">🌐</span>
+                  <strong id="workbench-target-root">No scan selected</strong>
+                </div>
+                <div class="burp-subnode-label">▾ 📁 Site map</div>
+                <div id="workbench-endpoints" class="site-map-list">
+                  <p class="muted">Loading site map from SQLite…</p>
+                </div>
+              </div>
+              <div class="burp-issues-section">
+                <div class="burp-dock-subheader">
+                  <span>🔍 Issues</span>
+                  <button type="button" class="text-button" data-route="findings">All →</button>
+                </div>
+                <div id="workbench-issues-summary" class="burp-issues-list">
+                  <button type="button" class="issue-tier-row" data-issue-severity="critical"><span class="sev-dot sev-critical">C</span><span>Critical</span><strong data-issue-count="critical">0</strong></button>
+                  <button type="button" class="issue-tier-row" data-issue-severity="high"><span class="sev-dot sev-high">H</span><span>High</span><strong data-issue-count="high">0</strong></button>
+                  <button type="button" class="issue-tier-row" data-issue-severity="medium"><span class="sev-dot sev-medium">M</span><span>Medium</span><strong data-issue-count="medium">0</strong></button>
+                  <button type="button" class="issue-tier-row" data-issue-severity="low"><span class="sev-dot sev-low">L</span><span>Low</span><strong data-issue-count="low">0</strong></button>
+                  <button type="button" class="issue-tier-row" data-issue-severity="info"><span class="sev-dot sev-info">I</span><span>Information</span><strong data-issue-count="info">0</strong></button>
+                </div>
+              </div>
+              <div class="burp-search-section">
+                <div class="burp-dock-subheader"><span>🔍 Search</span></div>
+                <input id="workbench-target-search" class="burp-search-input" type="search" placeholder="Search target...">
+              </div>
+            </aside>
+
+            <!-- Center/Right Main Workbench Area -->
+            <div class="burp-main-pane">
+              <!-- Subtabs + Filter Bar -->
+              <div class="burp-proxy-bar">
+                <div class="burp-subtabs">
+                  <button type="button" class="burp-subtab is-active">HTTP history</button>
+                  <button type="button" class="burp-subtab" data-route="traffic">Full traffic inspector</button>
+                  <button type="button" class="burp-subtab" data-route="events">Scan events</button>
+                  <button type="button" class="burp-subtab" data-route="new-scan">Scan options</button>
+                </div>
+                <div class="burp-scan-picker">
+                  <label for="workbench-scan-select" class="sr-only">Active scan</label>
+                  <select id="workbench-scan-select" class="burp-select"><option value="">Loading scans…</option></select>
+                  <button type="button" class="button button-secondary burp-btn-sm" id="workbench-refresh">Refresh</button>
+                </div>
+              </div>
+
+              <div class="burp-filter-bar">
+                <span class="burp-filter-prefix">Filter:</span>
+                <input id="workbench-history-filter" class="burp-filter-input" type="search" placeholder="Showing recorded HTTP exchanges from SQLite — filter by URL, method, status, or module…">
+                <span id="workbench-traffic-meta" class="burp-filter-meta">—</span>
+              </div>
+
+              <!-- HTTP History Table -->
+              <section class="panel burp-history-table-panel" aria-label="HTTP history">
+                <div class="table-wrap burp-history-scroll">
+                  <table class="workbench-table burp-history-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Host</th>
+                        <th>Method</th>
+                        <th>URL</th>
+                        <th>Params</th>
+                        <th>Status</th>
+                        <th>Length</th>
+                        <th>MIME / Module</th>
+                        <th>Title / Note</th>
+                      </tr>
+                    </thead>
+                    <tbody id="workbench-traffic-body">
+                      <tr><td colspan="9" class="table-empty">Loading HTTP history…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <!-- 3-Pane Split: Request | Response | Inspector -->
+              <section class="burp-split-inspectors" aria-label="Selected HTTP exchange inspector">
+                <article class="panel burp-reqresp-pane">
+                  <div class="burp-pane-header">
+                    <div class="burp-pane-title-row">
+                      <h2>Request</h2>
+                      <span id="workbench-request-meta" class="muted">Select an exchange</span>
+                    </div>
+                    <div class="burp-pane-actions">
+                      <button type="button" class="text-button" id="workbench-to-repeater">Send to Repeater ↗</button>
+                      <button type="button" class="text-button" data-copy-target="workbench-request-view">Copy</button>
+                    </div>
+                  </div>
+                  <div class="burp-code-tabs" role="tablist" aria-label="Request format">
+                    <button type="button" class="burp-code-tab is-active" data-wb-side="request" data-wb-view="pretty">Pretty</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="request" data-wb-view="raw">Raw</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="request" data-wb-view="hex">Hex</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="request" data-wb-view="headers">Headers</button>
+                  </div>
+                  <pre id="workbench-request-view" class="traffic-code burp-numbered-code">Select an exchange above to inspect the request.</pre>
+                </article>
+
+                <article class="panel burp-reqresp-pane">
+                  <div class="burp-pane-header">
+                    <div class="burp-pane-title-row">
+                      <h2>Response</h2>
+                      <span id="workbench-response-meta" class="muted">Stored response</span>
+                    </div>
+                    <div class="burp-pane-actions">
+                      <button type="button" class="text-button" data-copy-target="workbench-response-view">Copy</button>
+                    </div>
+                  </div>
+                  <div class="burp-code-tabs" role="tablist" aria-label="Response format">
+                    <button type="button" class="burp-code-tab is-active" data-wb-side="response" data-wb-view="pretty">Pretty</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="response" data-wb-view="raw">Raw</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="response" data-wb-view="hex">Hex</button>
+                    <button type="button" class="burp-code-tab" data-wb-side="response" data-wb-view="headers">Headers</button>
+                  </div>
+                  <pre id="workbench-response-view" class="traffic-code burp-numbered-code">Select an exchange above to inspect the response.</pre>
+                </article>
+
+                <aside class="panel burp-inspector-pane">
+                  <div class="burp-pane-header">
+                    <h2>Inspector</h2>
+                    <span class="inspector-badges"><span>⊞</span><span>⇅</span><span>🔍</span></span>
+                  </div>
+                  <div id="workbench-inspector-accordions" class="burp-accordions">
+                    <details class="burp-accordion" open>
+                      <summary><span>Request attributes</span><b id="wb-count-attrs" class="inspector-count">0</b></summary>
+                      <div id="wb-list-attrs" class="accordion-body"><p class="muted">Select an exchange.</p></div>
+                    </details>
+                    <details class="burp-accordion">
+                      <summary><span>Request headers</span><b id="wb-count-reqheaders" class="inspector-count">0</b></summary>
+                      <div id="wb-list-reqheaders" class="accordion-body"><p class="muted">None</p></div>
+                    </details>
+                    <details class="burp-accordion">
+                      <summary><span>Response headers</span><b id="wb-count-respheaders" class="inspector-count">0</b></summary>
+                      <div id="wb-list-respheaders" class="accordion-body"><p class="muted">None</p></div>
+                    </details>
+                    <details class="burp-accordion">
+                      <summary><span>Cookies</span><b id="wb-count-cookies" class="inspector-count">0</b></summary>
+                      <div id="wb-list-cookies" class="accordion-body"><p class="muted">None</p></div>
+                    </details>
+                    <details class="burp-accordion">
+                      <summary><span>Params</span><b id="wb-count-params" class="inspector-count">0</b></summary>
+                      <div id="wb-list-params" class="accordion-body"><p class="muted">None</p></div>
+                    </details>
+                  </div>
+                </aside>
+              </section>
+
+              <!-- Bottom 4-Column Dashboard Grid (matching the 6 cards in the reference image) -->
+              <section class="burp-bottom-cards" aria-label="Assessment overview cards">
+                <!-- Col 1: Target Overview + Technology Stack + Scan Statistics -->
+                <article class="panel burp-card burp-target-card">
+                  <div class="panel-heading"><h2>Target Overview</h2></div>
+                  <div class="burp-target-summary">
+                    <div class="burp-target-globe">🌐</div>
+                    <div class="burp-target-details">
+                      <div class="burp-target-title-line">
+                        <strong id="wb-card-target">—</strong>
+                        <span id="wb-card-status" class="burp-status-pill">Idle</span>
+                      </div>
+                      <div id="workbench-target-meta" class="burp-target-submeta">Scan ID: —</div>
+                      <div id="workbench-overview" class="burp-target-submeta">Started: — · Duration: —</div>
+                    </div>
+                  </div>
+                  <div class="burp-card-Subheading">Technology Stack</div>
+                  <div id="workbench-tech-pills" class="burp-tech-pills">
+                    <span class="tech-pill">No technologies observed</span>
+                  </div>
+                  <div class="burp-card-Subheading">Scan Statistics</div>
+                  <div class="burp-stat-quad">
+                    <div class="burp-stat-item"><span class="stat-icon">⊕</span><div><strong data-metric="endpoints" id="wb-stat-endpoints">0</strong><small>Endpoints</small></div></div>
+                    <div class="burp-stat-item"><span class="stat-icon">⧗</span><div><strong id="wb-stat-params">0</strong><small>Parameters</small></div></div>
+                    <div class="burp-stat-item"><span class="stat-icon">⇄</span><div><strong data-metric="requests" id="wb-stat-requests">0</strong><small>Requests</small></div></div>
+                    <div class="burp-stat-item"><span class="stat-icon">◎</span><div><strong id="wb-stat-findings">0</strong><small>Findings</small></div></div>
+                  </div>
+                  <div id="workbench-target-overview" hidden></div>
+                </article>
+
+                <!-- Col 2: Vulnerability Severity Donut + Top Vulnerabilities -->
+                <div class="burp-col-stack">
+                  <article class="panel burp-card">
+                    <div class="panel-heading"><h2>Vulnerability Severity</h2></div>
+                    <div class="burp-donut-wrap">
+                      <div class="burp-donut-figure">
+                        <svg viewBox="0 0 120 120" class="burp-donut-svg" aria-label="Finding severity distribution">
+                          <circle cx="60" cy="60" r="44" fill="none" stroke="#1e293b" stroke-width="14"></circle>
+                          <g id="workbench-donut-segments" transform="rotate(-90 60 60)"></g>
+                        </svg>
+                        <div class="burp-donut-center">
+                          <strong id="workbench-total-findings">0</strong>
+                          <span>Total Findings</span>
+                        </div>
+                      </div>
+                      <div id="workbench-severity" class="burp-donut-legend"></div>
+                    </div>
+                  </article>
+
+                  <article class="panel burp-card">
+                    <div class="panel-heading"><h2>Top Vulnerabilities</h2><button type="button" class="text-button" data-route="findings">View All &gt;</button></div>
+                    <div class="table-wrap">
+                      <table class="burp-mini-table">
+                        <thead><tr><th>#</th><th>Vulnerability</th><th>Severity</th><th>Count</th></tr></thead>
+                        <tbody id="workbench-top-vulns-body"><tr><td colspan="4" class="table-empty">No findings recorded</td></tr></tbody>
+                      </table>
+                    </div>
+                  </article>
+                </div>
+
+                <!-- Col 3: Recent Findings + Recent Scans -->
+                <div class="burp-col-stack">
+                  <article class="panel burp-card">
+                    <div class="panel-heading"><h2>Recent Findings</h2><button type="button" class="text-button" data-route="findings">View All &gt;</button></div>
+                    <div class="table-wrap">
+                      <table class="burp-mini-table">
+                        <thead><tr><th>#</th><th>Vulnerability</th><th>Severity</th><th>Endpoint</th></tr></thead>
+                        <tbody id="workbench-findings"><tr><td colspan="4" class="table-empty">No findings recorded</td></tr></tbody>
+                      </table>
+                    </div>
+                  </article>
+
+                  <article class="panel burp-card">
+                    <div class="panel-heading"><h2>Recent Scans</h2><button type="button" class="text-button" data-route="scans">View All &gt;</button></div>
+                    <div class="table-wrap">
+                      <table class="burp-mini-table">
+                        <thead><tr><th>Target</th><th>Status</th><th>Findings</th><th>Time</th></tr></thead>
+                        <tbody id="workbench-scans-body"><tr><td colspan="4" class="table-empty">No scans recorded</td></tr></tbody>
+                      </table>
+                    </div>
+                  </article>
+                </div>
+
+                <!-- Col 4: Live Console + Guarded Repeater -->
+                <div class="burp-col-stack">
+                  <article class="panel burp-card">
+                    <div class="panel-heading">
+                      <h2>Live Console</h2>
+                      <span id="wb-console-badge" class="burp-connected-pill">● Connected</span>
+                    </div>
+                    <div id="workbench-events" class="burp-mini-console" role="log" aria-live="polite">
+                      <p class="console-muted">Select a scan to inspect persisted engine events.</p>
+                    </div>
+                  </article>
+
+                  <article class="panel burp-card">
+                    <div class="panel-heading">
+                      <h2>Guarded Repeater</h2>
+                      <button type="button" class="text-button" data-route="repeater">Full Repeater ↗</button>
+                    </div>
+                    <div class="burp-mini-repeater-bar">
+                      <span id="wb-rep-method" class="method-chip">GET</span>
+                      <input id="wb-rep-path" class="burp-rep-input" type="text" value="/" readonly aria-label="Selected exchange path">
+                      <button type="button" class="button button-primary burp-btn-sm" id="wb-rep-send">Send</button>
+                    </div>
+                    <div class="burp-code-tabs">
+                      <button type="button" class="burp-code-tab is-active" data-wb-rep-tab="request">Request</button>
+                      <button type="button" class="burp-code-tab" data-wb-rep-tab="response">Response</button>
+                      <label class="wb-rep-consent"><input type="checkbox" id="wb-rep-authorized"> <span>Authorized</span></label>
+                    </div>
+                    <pre id="wb-rep-preview" class="traffic-code burp-mini-rep-code">Select an exchange above to stage in Guarded Repeater.</pre>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-new-scan" data-view="new-scan">
+          <div class="page-heading"><p class="eyebrow">SCANNING</p><h1>New scan</h1><p class="muted">Start with a target you own or are explicitly authorized to assess.</p></div>
+          <form class="panel form-panel" id="scan-start-form">
+            <label class="field-label" for="scan-target-url">Target URL</label><input id="scan-target-url" class="text-input" type="url" placeholder="https://example.com" autocomplete="url" required>
+            <label class="field-label field-gap" for="scan-extra-headers">Optional request headers (JSON)</label><textarea id="scan-extra-headers" class="code-input scan-headers-input" spellcheck="false" placeholder='{"Authorization":"Bearer …","Cookie":"session=…"}'></textarea><p class="field-help">Applied to each in-scope request. Transport-managed headers such as Host and Content-Length cannot be overridden.</p>
+            <label class="field-label field-gap" for="scan-priority">Testing portfolio</label><select id="scan-priority" class="filter-select"><option value="passive">Passive intelligence only (default)</option><option value="critical">Critical portfolio</option><option value="high">High portfolio</option><option value="medium">Medium portfolio</option><option value="low">Low portfolio</option><option value="full">Full portfolio</option></select>
+            <label class="field-label field-gap" for="scan-safety-mode">Safety/resource mode</label><select id="scan-safety-mode" class="filter-select"><option value="PASSIVE">PASSIVE · observation only (default)</option><option value="SAFE_ACTIVE">SAFE_ACTIVE · bounded supported checks</option><option value="CONTROLLED_ACTIVE">CONTROLLED_ACTIVE · explicit controlled checks</option></select><p class="field-help">The portfolio selects vulnerability priorities; this separate mode controls whether active checks are allowed. LAB is selected with the loopback-only checkbox below.</p>
+            <p class="field-help">Only implemented, applicable checks can run. Unsupported classes are reported as unsupported, not simulated.</p>
+            <details class="advanced-scope-config"><summary>Advanced: tighten target scope (JSON)</summary><p class="field-help">Optional bounds applied in addition to the exact target host: allowed IP/CIDR ranges, ports, URL prefixes, exclusions, methods, and time window. Methods default to GET, HEAD, and OPTIONS. State-changing methods require SAFE_ACTIVE, CONTROLLED_ACTIVE, or loopback LAB mode. This does not add batch targets.</p><label class="field-label" for="scan-scope-policy">Scope policy</label><textarea id="scan-scope-policy" class="code-input scan-scope-input" spellcheck="false" placeholder='{"allowed_ips":["192.0.2.10/32"],"allowed_ports":[443],"allowed_methods":["GET","HEAD","OPTIONS"]}'></textarea></details>
+            <details class="advanced-auth-config"><summary>Advanced: configure the supported read-only BOLA check</summary><p class="field-help">Optional JSON for a same-origin, three-GET owner/non-owner comparison. Use only test identities and a system you are authorized to assess. Choose Critical, High, or Full below and explicitly choose SAFE_ACTIVE or CONTROLLED_ACTIVE; other vulnerability classes remain unsupported.</p><label class="field-label" for="scan-auth-config">Authorization test configuration</label><textarea id="scan-auth-config" class="code-input scan-auth-input" spellcheck="false" placeholder='{"identities":{"owner":{"headers":{"X-Lab-User":"alice"}},"other":{"headers":{"X-Lab-User":"bob"}}},"authorization_tests":[{"url":"/api/orders?id=1001","owner_identity":"owner","other_identity":"other","owner_field":"owner","owner_value":"alice","identity_assertion":{"header":"X-Lab-Principal","owner_value":"alice","other_value":"bob"},"sensitive_fields":["email"]}]}'></textarea><p class="field-help">Verification requires distinct identities, an owner baseline, a repeatable non-owner read, and the configured sensitive field.</p></details>
+            <label class="consent-row"><input id="scan-authorized" type="checkbox" required><span>I own this target or have explicit permission to assess it.</span></label>
+            <label class="consent-row"><input id="scan-lab-mode" type="checkbox"><span>Use loopback-only LAB safety mode (target must be localhost or 127.0.0.1).</span></label>
+            <label class="consent-row sensitive-storage-row"><input id="scan-store-sensitive" type="checkbox"><span>Store full Cookie / Authorization values in HTTP history (plaintext in the local SQLite file).</span></label>
+            <p class="sensitive-storage-warning">Sensitive history is readable by anyone with access to this database. This option is accepted only when the dashboard binds to localhost.</p>
+            <div id="scan-start-error" class="form-error" role="alert" hidden></div>
+            <button class="button button-primary" id="scan-start-button" type="submit">Start scan</button>
+          </form>
+          <section class="notice-panel"><strong>Testing safety</strong><p>Use a staging target where possible. Requests remain subject to authorization, scope, rate, request-budget, response-size, and redirect controls.</p></section>
+        </section>
+
+        <section class="view" id="view-scan-live" data-view="scan-live">
+          <div class="page-heading heading-row"><div><p class="eyebrow">SCANNING · LIVE</p><h1>Scan progress</h1><p id="scan-live-target" class="muted">Waiting for scan details…</p></div><button class="button button-secondary" id="scan-live-traffic">View HTTP traffic</button></div>
+          <section class="panel live-status-panel"><div><span class="metric-label">Status</span><strong id="scan-live-status" class="live-status">Starting</strong></div><div><span class="metric-label">Recorded requests</span><strong id="scan-live-requests" class="live-status">0</strong></div><div><span class="metric-label">Scan ID</span><code id="scan-live-id">—</code></div></section>
+          <section class="panel live-feed-panel"><div class="panel-heading"><div><h2>Actual scan events</h2><p class="muted">Stages and HTTP exchanges reported by the engine. No invented percent complete.</p></div></div><div id="scan-live-feed" class="console-output" role="log" aria-live="polite"><p class="console-muted">Scan events will appear here.</p></div></section>
+          <div id="scan-live-error" class="form-error" role="alert" hidden></div>
+        </section>
+
+        <section class="view" id="view-scans" data-view="scans">
+          <div class="page-heading heading-row"><div><p class="eyebrow">SCANNING</p><h1>Scans &amp; history</h1><p class="muted">Saved assessments with actual status, coverage counts, and request totals.</p></div><button class="button button-secondary" id="scans-refresh">Refresh</button></div>
+          <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Scan ID</th><th>Target</th><th>Profile</th><th>Status</th><th>Endpoints</th><th>Findings</th><th>Requests</th><th>Started</th><th>Actions</th></tr></thead><tbody id="scans-table-body"><tr><td colspan="9" class="table-empty">Loading stored scan history…</td></tr></tbody></table></div></section>
+          <section class="panel scan-detail-panel" id="scan-detail-panel" hidden><div class="panel-heading"><div><h2 id="scan-detail-title">Scan details</h2><p id="scan-detail-meta" class="muted"></p></div><button class="text-button" id="scan-detail-traffic">Open HTTP traffic →</button></div><div id="scan-detail-content" class="detail-grid"></div><h3 class="coverage-heading">Test coverage and limitations</h3><div id="scan-detail-coverage" class="coverage-list"><p class="muted">Coverage is loaded from the saved scan report.</p></div></section>
+        </section>
+
+        <section class="view" id="view-targets" data-view="targets"><div class="page-heading"><p class="eyebrow">DISCOVERY</p><h1>Targets</h1><p class="muted">Unique targets observed in saved VULNFORGE scan records.</p></div><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Target</th><th>Scans</th><th>Most recent status</th><th>Last scan start</th></tr></thead><tbody id="targets-table-body"><tr><td colspan="4" class="table-empty">Loading targets…</td></tr></tbody></table></div></section></section>
+        <section class="view" id="view-endpoints" data-view="endpoints"><div class="page-heading"><p class="eyebrow">DISCOVERY</p><h1>Endpoints</h1><p class="muted">Observed endpoints from stored scan records. A missing HTTP status means no response code was recorded—not that the endpoint is dead.</p></div><section class="panel data-filters"><label class="filter-field"><span>Scan</span><select id="endpoints-scan-filter" class="filter-select"><option value="">All scans</option></select></label><label class="filter-field filter-search"><span>Path / URL contains</span><input id="endpoints-search" class="filter-input" type="search" placeholder="Search endpoints"></label><button class="button button-secondary" id="endpoints-refresh">Refresh</button></section><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Scan</th><th>Method</th><th>URL</th><th>Status</th><th>Source</th><th>Content type</th><th>State-changing</th></tr></thead><tbody id="endpoints-table-body"><tr><td colspan="7" class="table-empty">Loading endpoint records…</td></tr></tbody></table></div></section></section>
+        <section class="view" id="view-parameters" data-view="parameters">
+          <div class="page-heading"><p class="eyebrow">DISCOVERY · STORED INPUTS</p><h1>Parameters</h1><p class="muted">Only parameters present in this scan's saved inventory are shown.</p></div>
+          <section class="panel data-filters"><label class="filter-field"><span>Scan</span><select id="parameters-scan-select" class="filter-select"><option value="">Loading scans…</option></select></label><label class="filter-field"><span>Location</span><select id="parameters-location-filter" class="filter-select"><option value="">All locations</option><option value="query">Query</option><option value="path">Path</option><option value="body">Body</option><option value="json">JSON</option><option value="form">Form</option><option value="header">Header</option><option value="cookie">Cookie</option><option value="multipart">Multipart</option></select></label><label class="filter-field filter-search"><span>Name / endpoint contains</span><input id="parameters-search" class="filter-input" type="search" placeholder="Search stored parameters"></label><button class="button button-secondary" id="parameters-refresh">Refresh</button></section>
+          <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Location</th><th>Method</th><th>Endpoint</th><th>Type</th><th>Source</th></tr></thead><tbody id="parameters-table-body"><tr><td colspan="6" class="table-empty">Select a scan to load parameters.</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel-heading"><div><h2>Selected parameter</h2><p class="muted">Stored inventory record and linked observations.</p></div><button class="text-button" data-copy-target="parameter-detail">Copy JSON</button></div><pre id="parameter-detail" class="traffic-code">Select a parameter row.</pre></section>
+        </section>
+
+        <section class="view" id="view-research" data-view="research">
+          <div class="page-heading"><p class="eyebrow">EVIDENCE GRAPH · STORED OBJECTS</p><h1>Research model</h1><p class="muted">Inspect actual observations, hypotheses, tests, controls and linked modeling records from one saved scan.</p></div>
+          <section class="panel data-filters"><label class="filter-field"><span>Scan</span><select id="research-scan-select" class="filter-select"><option value="">Loading scans…</option></select></label><label class="filter-field"><span>Object type</span><select id="research-kind-select" class="filter-select"><option value="hypotheses">Hypotheses</option><option value="tests">Tests</option><option value="controls">Embedded controls</option><option value="differentials">Embedded differentials</option><option value="observations">Observations</option><option value="api_inventory">API inventory</option><option value="api_documents">API documents</option><option value="actors">Actors / identities</option><option value="resources">Resources</option><option value="security_properties">Security properties</option><option value="asset_nodes">Asset nodes</option><option value="asset_edges">Asset relationships</option><option value="attack_paths">Attack-path records</option><option value="application_model">Application model</option></select></label><label class="filter-field filter-search"><span>Search stored object</span><input id="research-search" class="filter-input" type="search" placeholder="Search actual scan data"></label><button class="button button-secondary" id="research-refresh">Refresh</button><button class="button button-quiet" id="research-more" hidden>Load next page</button></section>
+          <section class="panel"><p id="research-summary" class="muted">Choose a scan and object type.</p><div class="table-wrap"><table><thead><tr><th>Record</th><th>Status / type</th><th>Summary</th></tr></thead><tbody id="research-table-body"><tr><td colspan="3" class="table-empty">No object selected.</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel-heading"><div><h2>Selected stored object · JSON</h2><p class="muted">Controls and differentials are extracted only from stored test/test-plan fields.</p></div><button class="text-button" data-copy-target="research-detail">Copy JSON</button></div><pre id="research-detail" class="traffic-code">Select a stored record.</pre></section>
+        </section>
+
+        <section class="view" id="view-technologies" data-view="technologies"><div class="page-heading"><p class="eyebrow">DISCOVERY</p><h1>Technologies</h1><p class="muted">Passive fingerprint signals only. These indicate observed evidence; they do not prove a specific deployment or version.</p></div><section class="panel data-filters"><label class="filter-field filter-search"><span>Technology search</span><input id="technology-search" class="filter-input" type="search" placeholder="Search technology name"></label><button class="button button-secondary" id="technology-refresh">Refresh</button></section><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Scan</th><th>Target</th><th>Name</th><th>Category</th><th>Confidence</th><th>Observed signals</th></tr></thead><tbody id="technologies-table-body"><tr><td colspan="6" class="table-empty">Loading observed technologies…</td></tr></tbody></table></div></section></section>
+        <section class="view" id="view-findings" data-view="findings"><div class="page-heading"><p class="eyebrow">SECURITY</p><h1>Findings</h1><p class="muted">Backend records only; candidates and verified findings are shown as distinct states.</p></div><section class="panel data-filters"><label class="filter-field"><span>Status</span><select id="finding-status-filter" class="filter-select"><option value="">All stored statuses</option><option value="VERIFIED">VERIFIED</option><option value="CANDIDATE">CANDIDATE</option><option value="REPRODUCED">REPRODUCED</option><option value="KILLED">KILLED</option></select></label><label class="filter-field"><span>Severity</span><select id="finding-severity-filter" class="filter-select"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select></label><label class="filter-field filter-search"><span>Search</span><input id="finding-search" class="filter-input" type="search" placeholder="Title, category, endpoint"></label><button class="button button-secondary" id="findings-refresh">Refresh</button></section><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Status</th><th>Severity</th><th>Title</th><th>Category</th><th>Target / endpoint</th><th>Parameter</th><th>Scan</th></tr></thead><tbody id="findings-table-body"><tr><td colspan="7" class="table-empty">Loading finding records…</td></tr></tbody></table></div></section></section>
+        <section class="view" id="view-verified" data-view="verified"><div class="page-heading"><p class="eyebrow">SECURITY</p><h1>Verified findings</h1><p class="muted">Only findings with the backend status VERIFIED are included.</p></div><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Severity</th><th>Title</th><th>Target / endpoint</th><th>Parameter</th><th>Confidence</th><th>Scan</th></tr></thead><tbody id="verified-table-body"><tr><td colspan="6" class="table-empty">Loading verified findings…</td></tr></tbody></table></div></section></section>
+        <section class="view" id="view-evidence" data-view="evidence"><div class="page-heading"><p class="eyebrow">SECURITY</p><h1>Evidence</h1><p class="muted">Persisted evidence linked to findings and tests; response content is inert text.</p></div><section class="panel data-filters"><label class="filter-field"><span>Scan</span><select id="evidence-scan-filter" class="filter-select"><option value="">All scans</option></select></label><button class="button button-secondary" id="evidence-refresh">Refresh</button></section><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Evidence ID</th><th>Finding</th><th>Test</th><th>Target</th><th>Summary</th></tr></thead><tbody id="evidence-table-body"><tr><td colspan="5" class="table-empty">Loading evidence records…</td></tr></tbody></table></div></section><section class="panel evidence-detail-panel"><h2>Selected evidence</h2><pre id="evidence-detail" class="traffic-code">Select a row to inspect stored evidence.</pre></section></section>
+        <section class="view" id="view-reports" data-view="reports"><div class="page-heading"><p class="eyebrow">REPORTING</p><h1>Reports</h1><p class="muted">Download JSON, HTML, Markdown, or PDF exports generated from saved scan reports. A completed run or zero findings is not a security clearance; review each scan’s coverage and unsupported checks.</p></div><section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Scan ID</th><th>Target</th><th>Status</th><th>Findings</th><th>Started</th><th>Exports</th></tr></thead><tbody id="reports-table-body"><tr><td colspan="6" class="table-empty">Loading report inventory…</td></tr></tbody></table></div></section></section>
+
+        <section class="view" id="view-repeater" data-view="repeater">
+          <div class="page-heading"><p class="eyebrow">TOOLS</p><h1>Repeater</h1><p class="muted">Replay or mutate one captured request under its original saved scan scope. Redirects are not followed; redacted credentials cannot be replayed.</p></div>
+          <div class="repeater-layout">
+            <section class="panel repeater-history"><div class="panel-heading"><div><h2>Request history</h2><p class="muted">Guarded Repeater exchanges</p></div><button class="text-button" id="refresh-repeater">Refresh</button></div><div id="repeater-history-list" class="history-list"><p class="muted">Open Repeater to load history.</p></div></section>
+            <section class="panel repeater-editor"><div class="panel-heading"><div><h2>Request</h2><p id="repeater-source-meta" class="muted">Choose a captured exchange from HTTP traffic first.</p></div><span id="repeater-status" class="state-chip">Ready</span></div><label class="field-label" for="repeater-raw-request">Request message</label><textarea id="repeater-raw-request" class="code-input" spellcheck="false">GET / HTTP/1.1
+
+</textarea><div class="repeater-consents"><label class="consent-row"><input id="repeater-authorized" type="checkbox"><span>I own this target or have explicit permission to test it.</span></label><label class="consent-row"><input id="repeater-state-change" type="checkbox"><span>For this request only, I explicitly authorize state-changing behavior if allowed by the saved scan policy.</span></label></div><div class="editor-actions"><p class="field-help">One request only · original scan scope · 1 RPS · 256 KiB response cap · no redirects.</p><button class="button button-primary" id="btn-repeater-send">Send guarded request</button></div><label class="field-label response-label" for="repeater-raw-response">Response</label><pre id="repeater-raw-response" class="code-output" aria-live="polite">Response will appear here.</pre></section>
+          </div>
+        </section>
+
+        <section class="view" id="view-events" data-view="events">
+          <div class="page-heading"><p class="eyebrow">DATABASE · PERSISTED ENGINE EVENTS</p><h1>Scan events</h1><p class="muted">Replay real events stored for a scan. Refresh and reopen use the SQLite event log; event records are not generated by the dashboard.</p></div>
+          <section class="panel data-filters"><label class="filter-field"><span>Scan</span><select id="events-scan-select" class="filter-select"><option value="">Loading scans…</option></select></label><label class="filter-field filter-search"><span>Search event type, message, or JSON</span><input id="events-search" class="filter-input" type="search" placeholder="Filter stored events"></label><button class="button button-secondary" id="events-refresh">Refresh events</button><button class="button button-quiet" id="events-more" hidden>Load older events</button></section>
+          <section class="panel"><p id="events-summary" class="muted">Choose a scan to load its persisted event stream.</p><div class="table-wrap"><table><thead><tr><th>Event ID</th><th>Time</th><th>Kind</th><th>Message</th></tr></thead><tbody id="events-table-body"><tr><td colspan="4" class="table-empty">No scan selected.</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel-heading"><div><h2>Selected event · structured JSON</h2><p class="muted">Redacted stored data for the selected event.</p></div><button class="text-button" data-copy-target="event-detail">Copy JSON</button></div><pre id="event-detail" class="traffic-code">Select a stored event.</pre></section>
+        </section>
+
+        <section class="view" id="view-console" data-view="console"><div class="page-heading"><p class="eyebrow">TOOLS</p><h1>Live console</h1><p class="muted">Connect to the existing scan event stream using a scan ID.</p></div><section class="panel console-panel"><form id="console-connect-form" class="console-connect"><label class="field-label" for="console-scan-id">Scan ID</label><input id="console-scan-id" class="text-input" type="text" placeholder="Enter a scan ID"><button class="button button-secondary" type="submit">Connect</button><button class="button button-quiet" type="button" id="console-disconnect">Disconnect</button></form><div id="live-terminal-output" class="console-output" role="log" aria-live="polite"><p class="console-muted">No scan stream connected.</p></div></section></section>
+
+        <section class="view" id="view-traffic" data-view="traffic">
+          <div class="page-heading"><p class="eyebrow">TOOLS · RECORDED SCAN EXCHANGES</p><h1>HTTP traffic</h1><p class="muted">Inspect the request and response pairs recorded by the selected VULNFORGE scan.</p></div>
+          <section class="panel traffic-filters">
+            <label class="filter-field"><span>Scan</span><select id="traffic-scan-select" class="filter-select"><option value="">Loading scans…</option></select></label>
+            <label class="filter-field"><span>Method</span><select id="traffic-method-filter" class="filter-select"><option value="">All methods</option><option>GET</option><option>POST</option><option>HEAD</option><option>OPTIONS</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
+            <label class="filter-field filter-search"><span>Path / host contains</span><input id="traffic-search-filter" class="filter-input" type="search" placeholder="Filter URL"></label>
+            <label class="filter-field"><span>Status</span><input id="traffic-status-filter" class="filter-input status-input" type="number" min="0" max="599" placeholder="Any"></label>
+            <label class="filter-field"><span>Provenance / module</span><input id="traffic-module-filter" class="filter-input" type="search" placeholder="crawler, repeater…"></label>
+            <label class="filter-field"><span>Exchange outcome</span><select id="traffic-error-filter" class="filter-select"><option value="">Any</option><option value="false">HTTP response recorded</option><option value="true">Request error / blocked</option></select></label>
+            <button class="button button-secondary" id="traffic-refresh">Refresh</button>
+          </section>
+          <section class="panel traffic-list-panel">
+            <div class="panel-heading"><div><h2>HTTP history</h2><p id="traffic-summary" class="muted">Choose a scan to view recorded exchanges.</p></div><div class="traffic-page-controls"><button class="button button-quiet" id="traffic-prev" disabled>Previous</button><button class="button button-quiet" id="traffic-next" disabled>Next</button></div></div>
+            <div class="table-wrap"><table class="traffic-table"><thead><tr><th>#</th><th>Host</th><th>Method</th><th>URL</th><th>Status</th><th>Module</th><th>Req body</th><th>Resp body</th></tr></thead><tbody id="traffic-table-body"><tr><td colspan="8" class="table-empty">Select a scan to load HTTP traffic.</td></tr></tbody></table></div>
+          </section>
+          <section class="traffic-inspector" aria-label="Selected HTTP exchange">
+            <article class="panel traffic-pane"><div class="traffic-pane-heading"><div><h2>Request</h2><span id="traffic-request-meta" class="muted">Captured request · redacted</span></div><div><button class="text-button" id="traffic-to-repeater">Load into guarded Repeater</button> <button class="text-button" data-copy-target="traffic-request-view">Copy view</button></div></div><div class="traffic-tabs" role="tablist" aria-label="Request inspector views"><button class="traffic-tab is-active" role="tab" aria-selected="true" data-traffic-side="request" data-traffic-view="raw">Raw</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="headers">Headers</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="query">Query</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="path">Path</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="cookies">Cookies</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="body">Body</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="request" data-traffic-view="json">JSON</button></div><pre id="traffic-request-view" class="traffic-code" role="tabpanel" tabindex="0">Select an exchange above.</pre></article>
+            <article class="panel traffic-pane"><div class="traffic-pane-heading"><div><h2>Response</h2><span id="traffic-response-meta" class="muted">Captured response · redacted</span></div><button class="text-button" data-copy-target="traffic-response-view">Copy view</button></div><div class="traffic-tabs" role="tablist" aria-label="Response inspector views"><button class="traffic-tab is-active" role="tab" aria-selected="true" data-traffic-side="response" data-traffic-view="raw">Raw</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="response" data-traffic-view="headers">Headers</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="response" data-traffic-view="cookies">Cookies</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="response" data-traffic-view="body">Body</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="response" data-traffic-view="json">JSON</button><button class="traffic-tab" role="tab" aria-selected="false" data-traffic-side="response" data-traffic-view="timing">Timing</button></div><pre id="traffic-response-view" class="traffic-code" role="tabpanel" tabindex="0">Select an exchange above.</pre></article>
+          </section>
+          <section class="panel diff-panel"><div class="panel-heading"><div><h2>Structured response comparison</h2><p class="muted">Compare this exchange with another stored exchange ID. Differences are not vulnerability verdicts.</p></div><div><input id="traffic-compare-id" class="filter-input" type="text" placeholder="Other exchange ID"><button class="button button-secondary" id="traffic-compare">Compare</button></div></div><pre id="traffic-diff-view" class="traffic-code">JSON responses are compared by JSON Pointer; other bodies get a bounded text diff.</pre></section>
+          <p class="traffic-safety-note">Messages are reconstructed from the prepared request and parsed response; they are not TLS/packet byte captures. Bodies are decoded and may be capped. Sensitive values are plaintext only for scans where that option was enabled. Displayed content is inert text and is never executed.</p>
+        </section>
+
+        <section class="view" id="view-utilities" data-view="utilities">
+          <div class="page-heading"><p class="eyebrow">TOOLS</p><h1>Utilities</h1><p class="muted">Run local text encodings and checksums through the existing utility API.</p></div>
+          <section class="panel utility-panel"><form id="utility-form" class="utility-form"><label class="field-label" for="utility-input">Input text</label><textarea id="utility-input" class="code-input" spellcheck="false" placeholder="Paste text to transform" maxlength="65536"></textarea><div class="data-filters utility-controls"><label class="filter-field"><span>Operation</span><select id="utility-operation" class="filter-select"><option value="url_encode">URL encode</option><option value="url_decode">URL decode</option><option value="b64_encode">Base64 encode</option><option value="b64_decode">Base64 decode</option><option value="sha256">SHA-256 checksum</option><option value="md5">MD5 checksum (legacy use only)</option></select></label><button class="button button-primary" id="utility-run" type="submit">Run utility</button></div><div id="utility-error" class="form-error" role="alert" hidden></div></form><div class="panel-heading"><div><h2>Output</h2><p id="utility-result-meta" class="muted">No operation run yet.</p></div><button class="text-button" data-copy-target="utility-output">Copy</button></div><pre id="utility-output" class="traffic-code utility-output">Output will appear here.</pre><p class="field-help">Utilities do not scan targets. MD5 and SHA-256 here are plain checksums, not password hashing or security findings.</p></section>
+        </section>
+        <section class="view" id="view-settings" data-view="settings">
+          <div class="page-heading heading-row"><div><p class="eyebrow">WORKSPACE</p><h1>Settings &amp; diagnostics</h1><p class="muted">Read-only runtime and database status. Environment changes require a server restart.</p></div><button class="button button-secondary" id="settings-refresh">Refresh</button></div>
+          <section class="panel"><div id="settings-grid" class="settings-grid"><p class="muted">Loading runtime settings…</p></div><div id="settings-warning" class="settings-warning">Only use VULNFORGE against systems you own or are explicitly authorized to assess. Keep the dashboard bound to 127.0.0.1; this interface does not provide user authentication.</div></section>
+        </section>
+
+        <footer class="page-footer"><span>VULNFORGE</span><span>Evidence-led · Scope-aware · Local workspace</span></footer>
+      </main>
+    </div>
+  </div>
+  <script src="/static/traffic_inspector.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

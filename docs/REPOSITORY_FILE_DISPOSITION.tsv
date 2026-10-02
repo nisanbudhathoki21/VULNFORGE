@@ -1,0 +1,347 @@
+path	disposition	reason
+.gitignore	KEEP	Canonical exclusions for environments, caches, databases, secrets, reports, and builds.
+data/vulnforge.db	KEEP	Fresh schema-only release artifact; no scan data, ignored by Git to protect runtime history.
+README.md	KEEP	Canonical Linux-first install/run/use guide and explicit detection limits.
+VulnForge_Ultimate/.gitignore	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/LICENSE	MERGE	MIT notice copied to root LICENSE before retiring the historical project tree.
+VulnForge_Ultimate/README.md	MERGE	Reconciled against current claims and replaced by the accurate canonical root README; old project guide retired.
+VulnForge_Ultimate/VulnForge	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/ai/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/ai/analyzer.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/ai/providers.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/attic/README.md	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/dead-code/vulnforge_passive.py	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/dead-code/workflow.py	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/orphans/fix_vulnforge.sh	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/orphans/ssrf.yaml	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/cli.py.before-db-fix	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.before-fence-fix	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.before-path-fix	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.before-path-list-fix	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.before-tail-fix	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.corrupted	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/attic/scanner-backups/scanner.py.fence-broken	REMOVE	Historical backups/orphans; reference scan shows no active runtime import; retire after confirming no external consumer.
+VulnForge_Ultimate/config/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/config/bugbounty.json	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/config/settings.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/container.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/database.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/di.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/differential.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/evidence.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/exploit.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/fingerprint.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/heuristics.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/logging.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/plugins.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/report.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/scope.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/core/verifier.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/correlation/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/correlation/advanced_chain.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/correlation/engine.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/critical_bug_demo.py	REPLACE	Use only as scenario reference; current unsafe process/path/network behavior must be replaced with local harmless simulations.
+VulnForge_Ultimate/demo_correlation.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/README.md	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/app.py	REPLACE	Use only as scenario reference; current unsafe process/path/network behavior must be replaced with local harmless simulations.
+VulnForge_Ultimate/demo_critical/notes.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/requirements-dev.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/requirements.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/run_demo.sh	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/demo_critical/templates_expected.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/docs/Banner/banner.png	REMOVE	Historical branding asset not required by the single text/inline-styled dashboard.
+VulnForge_Ultimate/docs/diagrams/vulnforge-architecture.png	REMOVE	Old architecture diagram depicts duplicate components and was superseded by docs/ARCHITECTURE_MAP.md.
+VulnForge_Ultimate/engine/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/advanced_dsl.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/bugbounty/scope.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/discovery.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/endpoint_pipeline.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/interactsh.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/nikto_fingerprint.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/pipeline.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/recon/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/recon/crawler.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/recon/models.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/recon/parser.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/recon/scope.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/scanner.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/template_runtime.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/engine/template_validator.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/example_scan.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/extractor/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/extractor/engine.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/httpclient/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/httpclient/client.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/main.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/matcher/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/matcher/engine.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/proxies.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/pytest.ini	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/hackerone_report.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/json_report.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/markdown.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/pdf_report.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/report/scan_report.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/requirements-dev.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/requirements-lock.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/requirements.txt	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/risk/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/risk/engine.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/scripts/seed_demo_db.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/setup.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/templates/__init__.py	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/_disabled/starbucks-jp/bola-mass-assignment-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/_disabled/starbucks-jp/unauthenticated-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/_disabled/starbucks-jp/unauthenticated.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/authorization/bola-graphql.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/authorization/bola-numeric.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/authorization/bola-uuid.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/authorization/function-level-auth.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/business-logic/mass-assignment.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/idor-notes-endpoint.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/injection/blind-sqli.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/injection/command-injection.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/injection/nosql-injection.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/injection/sql-injection.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/injection/sqli-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/os-command-injection-ping.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/server-side/path-traversal.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/server-side/ssrf-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/server-side/ssrf.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/server-side/ssti.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/sqli-login-authbypass.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/critical/unrestricted-file-upload.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/api/bola-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/api/bola-ultimate.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/api/bola-unique.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/api/mass-assignment-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/api/mass-assignment.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/authorization/idor-check.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/upload/mime-bypass.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/upload/unrestricted-file-upload.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/xss/dom-xss.yaml.disabled	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/xss/reflected-xss.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/xss/stored-xss.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/high/xss/xss-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/loader.py	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/exposure/env-exposure-unique.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/exposure/env-exposure.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/exposure/git-exposure-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/exposure/git-exposure.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/exposure/server-disclosure.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/low/headers/security-headers.vft.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/authentication/csrf-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/authentication/csrf.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/authentication/jwt-misconfiguration.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/authentication/oauth-god.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/authentication/oauth-misconfiguration.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/graphql/introspection-enabled.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/misconfiguration/cors-check.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/misconfiguration/cors-wildcard.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/medium/redirect/open-redirect.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/misconfiguration/public-exposure.yaml	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/templates/schema.py	REMOVE	Legacy scanner templates are not evidence-verified coverage; port only individually reviewed safe validation tests if justified.
+VulnForge_Ultimate/terminal/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/terminal/cli.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/terminal/dashboard.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/terminal/explain_engine.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/terminal/pdf_summary.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/terminal/ui.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/test_pipeline.py	MERGE	Safe positive/negative test intent was reviewed; applicable behavior is covered by canonical local lab and pipeline E2E tests. Historical engine-specific assertions were not retained.
+VulnForge_Ultimate/tests/__init__.py	REMOVE	Removed with the second test package after test intent review; canonical pytest discovery remains vulnforge/tests.
+VulnForge_Ultimate/tests/test_scanner_runtime.py	MERGE	Relevant safety and positive/negative intent is represented in canonical scope, request-gate, and local lab tests; unverified runtime behavior was not ported.
+VulnForge_Ultimate/tests/test_template_execution.py	REMOVE	Template execution engine was not retained; its behavior was not evidence-verified and would recreate a second scanner/runtime.
+VulnForge_Ultimate/tests/test_template_runtime.py	REMOVE	Template execution engine was not retained; its behavior was not evidence-verified and would recreate a second scanner/runtime.
+VulnForge_Ultimate/tests_manual/clean_app.py	MERGE	Safe comparison intent was replaced by controlled local training fixtures and patched negative-control tests.
+VulnForge_Ultimate/tests_manual/demo_templates/git-exposure.yaml	REMOVE	Legacy template was not independently evidence-verified; unsupported classes remain explicitly unsupported.
+VulnForge_Ultimate/tests_manual/demo_templates/open-redirect.yaml	MERGE	Safe paired redirect test intent is represented by the canonical verifier and vulnerable/patched Medium-lab E2E tests.
+VulnForge_Ultimate/tests_manual/demo_templates/sql-injection.yaml	REMOVE	Broad legacy SQL template behavior was not carried forward; current SQL/parser check is observation-only and non-exploitative.
+VulnForge_Ultimate/tests_manual/vuln_app.py	MERGE	Safe scenario intent was replaced with isolated synthetic critical/high/medium labs; dangerous legacy harness behavior was not ported.
+VulnForge_Ultimate/tools/validate_templates.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/cli.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/console.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/fs.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/logger.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/url.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/utils/yaml.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/vulnforge	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/workspace/__init__.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/workspace/models.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+VulnForge_Ultimate/workspace/store.py	REMOVE	Competing historical runtime (scanner/DB/CLI/dashboard); selectively port verified useful behavior before retiring the duplicate.
+cli.py	REMOVE	The duplicate root CLI was retired; supported operations and stored-scan views are in vulnforge/cli.py.
+database.py	REMOVE	The duplicate root schema/data layer was retired; active reads and writes use vulnforge/core/store.py. Existing DB files were preserved untouched.
+docs/ARCHITECTURE_MAP.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/ARCHITECTURE_STATE.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/CLI_REFERENCE.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/DETECTION_QUALITY.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/EVIDENCE_MODEL.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/IMPLEMENTATION_PLAN.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/LINUX_INSTALL_AND_TEST.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/MILESTONE_COVERAGE.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/PLUGIN_API.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/REPOSITORY_AUDIT.md	KEEP	Authoritative pre-consolidation audit and gated migration sequence.
+docs/REPOSITORY_FILE_DISPOSITION.tsv	KEEP	Audited path-level disposition inventory; update as migration proceeds.
+docs/SECURITY_MODEL.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/TESTING_MODEL.md	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+docs/schemas/vulnforge-report-v1.schema.json	MERGE	Useful documentation; reconcile runtime paths, lab coverage, and the final canonical architecture.
+engine/baseline.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/core.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/crawler.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/api_debug.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/cors_csrf.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/mass_assignment.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/open_redirect.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/path_traversal.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/security_headers.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/sensitive_files.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/sqli.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/ssrf.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/modules/xss.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/repeater.py	REMOVE	Guarded source-linked Repeater behavior was moved to vulnforge.dashboard and its API tests; old implementation retired.
+engine/reporter.py	REMOVE	Retired after preserving the modified optional-PDF intent in the canonical dependency-free PDF renderer and a portability test.
+engine/requester.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/verifier.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+engine/verifier_engine.py	REMOVE	Unreferenced second scanner implementation retired after reference audit; current registry marks unsupported classes honestly.
+examples/SCOPE_FILES.md	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/authorized-ip-scope.example.txt	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/browser-workflows.example.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/example-lab-scan.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/lab-auth-patched.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/lab-auth.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/read-only-workflows.example.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/scope-policy.example.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+examples/workflow-capture-validation.example.json	KEEP	Useful configuration/sample inputs; validate fake credentials, scope, and applicability before release.
+labs/README.md	MERGE	Replace documentation-only state with critical/high/medium independent vulnerable/patched local apps.
+pyproject.toml	KEEP	Canonical build metadata, single public console entry point, package data, and test configuration.
+requirements.txt	KEEP	Canonical runtime/dashboard dependencies only; no historical scanner dependency set.
+run.sh	KEEP	Thin launcher delegates to the single vulnforge CLI/dashboard.
+seed.py	REMOVE	Legacy root database seeder was retired; canonical runtime does not seed/reset user databases.
+server.py	KEEP	Compatibility launcher only; imports the canonical vulnforge.dashboard app and contains no independent routes or data layer.
+setup.py	MERGE	Reduced to a setuptools compatibility shim; pyproject.toml is the sole package/entry-point configuration.
+static/app.js	MERGE	Migrated into vulnforge/dashboard_static/app.js; handlers now use only the canonical dashboard API.
+static/index.html	MERGE	Migrated into vulnforge/dashboard_static/index.html; the root duplicate was retired after integration tests.
+static/styles.css	MERGE	Migrated into vulnforge/dashboard_static/styles.css; root duplicate retired.
+static/traffic_inspector.js	MERGE	Migrated into vulnforge/dashboard_static/traffic_inspector.js; root duplicate retired.
+vulnforge/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/__main__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/cli.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/cli_ui.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/authorization.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/coverage.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/models.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/outcomes.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/phases.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/profiles.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/ratelimit.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/redaction.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/core/store.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/api_schema.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/attack_paths.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/browser_capture.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/browser_workflow.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/classify.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/cors_verification.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/crawler.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/fingerprint.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/intelligence.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/inventory.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/jsanalysis.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/live.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/methodology.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/normalize.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/open_redirect_verification.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/orchestrator.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/research.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/sql_injection_verification.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/verification.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/vulnerability_registry.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/workflow.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/engine/workflow_execution.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/http/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/http/client.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/lab.py	REMOVE	Former extra port-8765 lab runtime moved to a non-public deterministic test fixture; only the three organized labs are user-facing.
+vulnforge/plugins/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/plugins/base.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/plugins/passive/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/plugins/passive/info_disclosure.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/plugins/passive/security_headers.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/report/__init__.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/report/json_report.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/report/renderers.py	KEEP	Canonical structured implementation after the phase-1 package rename; retain and refactor behind clear services.
+vulnforge/tests/__init__.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/conftest.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_api_schema.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_assessment_features.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_attack_paths.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_authorization.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_authorization_verification.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_browser_capture.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_browser_workflow.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_cli_ui.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_core.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_cors_verification.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_crawler_cancellation.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_emergency_stop.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_guarded_repeater.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_js_fingerprint.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_live_service.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_local_lab_variants.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_open_redirect_verification.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_optional_legacy_reporter.py	REMOVE	Legacy ReportLab import test replaced with test_report_renderer_portability.py for the canonical dependency-free PDF writer.
+vulnforge/tests/test_pipeline_e2e.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_request_budget_redirects.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_request_history_capture.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_research_workspace.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_result_outcomes.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_scan_event_store.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_scan_id_cli.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_scope_policy_files.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_sql_injection_verification.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_store_live_exchange.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_store_schema_compat.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_technology_aggregation.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_traffic_inspector.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_vulnerability_profiles.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_workflow_execution.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge/tests/test_workflow_model.py	KEEP	Canonical pytest suite; covers the active package, dashboard API, report, safety gates, and local lab behaviors.
+vulnforge_dashboard.html	REMOVE	Retired after removing its legacy generator and migrating the active UI into the package dashboard.
+examples/critical-lab-auth.json	KEEP	Synthetic/local example configuration; no production credentials.
+examples/high-lab-auth-patched.json	KEEP	Synthetic/local example configuration; no production credentials.
+examples/high-lab-auth.json	KEEP	Synthetic/local example configuration; no production credentials.
+labs/__init__.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/critical/__init__.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/critical/app.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/high/__init__.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/high/app.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/medium/__init__.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/medium/app.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+labs/runtime.py	KEEP	Loopback-only training fixture operated by the canonical vulnforge lab subcommand.
+vulnforge/dashboard.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/dashboard_static/app.js	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/dashboard_static/index.html	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/dashboard_static/styles.css	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/dashboard_static/traffic_inspector.js	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/tests/lab_fixture.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/tests/test_lab_scan_e2e.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/tests/test_lab_scan_profiles_e2e.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/tests/test_report_renderer_portability.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+vulnforge/tests/test_training_labs.py	KEEP	Canonical runtime, dashboard, report, test, or package asset; referenced by the single installed application.
+.preview-legacy.db	KEEP	Existing/local SQLite data or journal preserved in place; not reset, deleted, migrated, or included in the source ZIP.
+.preview-legacy.db-shm	KEEP	Existing/local SQLite data or journal preserved in place; not reset, deleted, migrated, or included in the source ZIP.
+.preview-legacy.db-wal	KEEP	Existing/local SQLite data or journal preserved in place; not reset, deleted, migrated, or included in the source ZIP.
+.preview-v2.db	KEEP	Existing/local SQLite data or journal preserved in place; not reset, deleted, migrated, or included in the source ZIP.
+vulnforge.db	KEEP	Existing/local SQLite data or journal preserved in place; not reset, deleted, migrated, or included in the source ZIP.
+docs/QUALITY_REPORT.md	KEEP	Canonical architecture, safety, test, audit, milestone, or quality documentation.
+.env.example	KEEP	Secrets-hygiene template from Phase 1 overlay; safe local env-var example.
+configs/.gitkeep	KEEP	Local gitignored config directory placeholder from Phase 1 overlay.
+configs/README.md	KEEP	Documentation for local auth/scope/login configs from Phase 1 & 2 overlays.
+examples/login-flow.example.json	KEEP	Authenticated login flow example configuration from Phase 2 overlay.
+vulnforge/engine/login_flow.py	KEEP	Pre-scan authenticated login flow and CSRF/cookie session helper from Phase 2 overlay.
+vulnforge/tests/test_login_flow.py	KEEP	Unit tests for authenticated login flow, CSRF extraction, and multi-role expansion.
+vulnforge/tests/test_security_headers_registry.py	KEEP	Unit tests for security_headers and cookie_session registry support from Phase 3 overlay.

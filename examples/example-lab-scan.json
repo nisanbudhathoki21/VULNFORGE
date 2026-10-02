@@ -1,0 +1,453 @@
+{
+  "tool": "VulnForge 2",
+  "version": "2.0.0-alpha",
+  "disclaimer": "VulnForge performs automated security assessment and identifies potential vulnerabilities. Results require validation. Automated tools cannot exhaustively detect business-logic, authorization, or chained vulnerabilities — manual review is essential.",
+  "scan": {
+    "scan_id": "scan-2f9c3938218d",
+    "target": "http://127.0.0.1:5001",
+    "profile": "lab",
+    "started_at": 1789709178.0565662,
+    "duration_s": 0.18,
+    "aborted": false,
+    "stage_timings": {
+      "auth": 0.0,
+      "http": 0.12,
+      "recon": 0.02,
+      "crawl": 0.03,
+      "js": 0.0,
+      "inventory": 0.0,
+      "tech": 0.0,
+      "passive-checks": 0.0
+    }
+  },
+  "scope": {
+    "allowed_hosts": [
+      "127.0.0.1"
+    ],
+    "allowed_ips": [],
+    "allowed_ports": [],
+    "allowed_prefixes": [],
+    "excluded_paths": [],
+    "excluded_params": [],
+    "profile": "lab",
+    "allow_private": false,
+    "confirmed": true
+  },
+  "statistics": {
+    "requests_sent": 9,
+    "requests_refused_scope": 0,
+    "pages_crawled": 6,
+    "endpoints_discovered": 6,
+    "parameters_discovered": 5,
+    "signals": 0,
+    "started_at": 1789709178.0565662,
+    "finished_at": 1789709178.231866,
+    "scope_denied": 0,
+    "findings_total": 6,
+    "by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 3,
+      "info": 3
+    }
+  },
+  "technologies": [
+    {
+      "name": "Werkzeug",
+      "category": "server",
+      "confidence": "MEDIUM",
+      "signals": [
+        "header server: Werkzeug/3.1.8 Python/3.13.14"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "url": "http://127.0.0.1:5001/",
+      "normalized": "http://127.0.0.1:5001/",
+      "method": "GET",
+      "path": "/",
+      "params": [],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 200,
+      "title": "",
+      "response_hash": "4c74d2f9b269afb6",
+      "response_length": 544,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2269745
+    },
+    {
+      "url": "http://127.0.0.1:5001/admin?role=user",
+      "normalized": "http://127.0.0.1:5001/admin?role=",
+      "method": "GET",
+      "path": "/admin",
+      "params": [
+        {
+          "name": "role",
+          "location": "query",
+          "endpoint_url": "http://127.0.0.1:5001/admin?role=",
+          "method": "GET",
+          "content_type": "text/html; charset=utf-8",
+          "example": "user",
+          "type_hint": "string",
+          "classifications": [
+            "role_like"
+          ],
+          "source": "crawl",
+          "confidence": 0.7
+        }
+      ],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 200,
+      "title": "",
+      "response_hash": "54a9e24e89634ffb",
+      "response_length": 40,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2270515
+    },
+    {
+      "url": "http://127.0.0.1:5001/file?name=notes.txt",
+      "normalized": "http://127.0.0.1:5001/file?name=",
+      "method": "GET",
+      "path": "/file",
+      "params": [
+        {
+          "name": "name",
+          "location": "query",
+          "endpoint_url": "http://127.0.0.1:5001/file?name=",
+          "method": "GET",
+          "content_type": "text/html; charset=utf-8",
+          "example": "notes.txt",
+          "type_hint": "string",
+          "classifications": [
+            "path_value"
+          ],
+          "source": "crawl",
+          "confidence": 0.7
+        }
+      ],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 200,
+      "title": "",
+      "response_hash": "29ca88eebbdd4bf5",
+      "response_length": 104,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2272036
+    },
+    {
+      "url": "http://127.0.0.1:5001/ssti?name=VulnForge",
+      "normalized": "http://127.0.0.1:5001/ssti?name=",
+      "method": "GET",
+      "path": "/ssti",
+      "params": [
+        {
+          "name": "name",
+          "location": "query",
+          "endpoint_url": "http://127.0.0.1:5001/ssti?name=",
+          "method": "GET",
+          "content_type": "text/html; charset=utf-8",
+          "example": "VulnForge",
+          "type_hint": "string",
+          "classifications": [],
+          "source": "crawl",
+          "confidence": 0.7
+        }
+      ],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 200,
+      "title": "",
+      "response_hash": "3d2af8a69c4c304b",
+      "response_length": 15,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2272666
+    },
+    {
+      "url": "http://127.0.0.1:5001/cmd?host=127.0.0.1",
+      "normalized": "http://127.0.0.1:5001/cmd?host=",
+      "method": "GET",
+      "path": "/cmd",
+      "params": [
+        {
+          "name": "host",
+          "location": "query",
+          "endpoint_url": "http://127.0.0.1:5001/cmd?host=",
+          "method": "GET",
+          "content_type": "text/html; charset=utf-8",
+          "example": "127.0.0.1",
+          "type_hint": "string",
+          "classifications": [
+            "path_value"
+          ],
+          "source": "crawl",
+          "confidence": 0.7
+        }
+      ],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 500,
+      "title": "500 Internal Server Error",
+      "response_hash": "ae5163256b944013",
+      "response_length": 265,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2273197
+    },
+    {
+      "url": "http://127.0.0.1:5001/ssrf?url=http%3A%2F%2F127.0.0.1%3A5001%2F",
+      "normalized": "http://127.0.0.1:5001/ssrf?url=",
+      "method": "GET",
+      "path": "/ssrf",
+      "params": [
+        {
+          "name": "url",
+          "location": "query",
+          "endpoint_url": "http://127.0.0.1:5001/ssrf?url=",
+          "method": "GET",
+          "content_type": "text/html; charset=utf-8",
+          "example": "http://127.0.0.1:5001/",
+          "type_hint": "string",
+          "classifications": [
+            "redirect",
+            "url_value"
+          ],
+          "source": "crawl",
+          "confidence": 0.7
+        }
+      ],
+      "content_type": "text/html; charset=utf-8",
+      "source": "crawl",
+      "depth": 0,
+      "status": 200,
+      "title": "",
+      "response_hash": "1cbaa8c238dae447",
+      "response_length": 555,
+      "state_changing": false,
+      "auth_hint": "[REDACTED]",
+      "technologies": [],
+      "discovered_at": 1789709178.2274022
+    }
+  ],
+  "discovery_signals": [],
+  "findings": [
+    {
+      "title": "Security header not set: Content-Security-Policy",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "low",
+      "description": "The HTTP header Content-Security-Policy was absent on 6/6 HTML pages crawled. Helps prevent XSS and data-injection by constraining where content can load from. This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "Content-Security-Policy absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-6050b9d9e512",
+      "created_at": 1789709178.2317755,
+      "simple_summary": "The site does not send the 'Content-Security-Policy' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    },
+    {
+      "title": "Security header not set: Strict-Transport-Security",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "low",
+      "description": "The HTTP header Strict-Transport-Security was absent on 6/6 HTML pages crawled. Forces HTTPS on subsequent visits; missing on HTTPS sites enables downgrade attacks. This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "Strict-Transport-Security absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-8eadca4b4056",
+      "created_at": 1789709178.2317967,
+      "simple_summary": "The site does not send the 'Strict-Transport-Security' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    },
+    {
+      "title": "Security header not set: X-Content-Type-Options",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "info",
+      "description": "The HTTP header X-Content-Type-Options was absent on 6/6 HTML pages crawled. Prevents MIME-sniffing of responses into executable content. This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "X-Content-Type-Options absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-844db75e1441",
+      "created_at": 1789709178.2318082,
+      "simple_summary": "The site does not send the 'X-Content-Type-Options' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    },
+    {
+      "title": "Security header not set: X-Frame-Options",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "low",
+      "description": "The HTTP header X-Frame-Options was absent on 6/6 HTML pages crawled. Protects against clickjacking (or use CSP frame-ancestors). This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "X-Frame-Options absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-277a32aa2ce1",
+      "created_at": 1789709178.23182,
+      "simple_summary": "The site does not send the 'X-Frame-Options' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    },
+    {
+      "title": "Security header not set: Referrer-Policy",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "info",
+      "description": "The HTTP header Referrer-Policy was absent on 6/6 HTML pages crawled. Controls how much URL data leaks to third parties via the Referer header. This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "Referrer-Policy absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-e36f2778019b",
+      "created_at": 1789709178.2318282,
+      "simple_summary": "The site does not send the 'Referrer-Policy' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    },
+    {
+      "title": "Security header not set: Permissions-Policy",
+      "category": "Security Misconfiguration (header hardening)",
+      "severity": "info",
+      "description": "The HTTP header Permissions-Policy was absent on 6/6 HTML pages crawled. Restricts powerful browser features (camera, mic, geolocation). This is a defense-in-depth gap, not a directly exploitable vulnerability.",
+      "endpoint": "http://127.0.0.1:5001/",
+      "parameter": "",
+      "method": "GET",
+      "confidence": 0.9,
+      "status": "likely",
+      "evidence": [
+        {
+          "description": "Permissions-Policy absent on 6/6 HTML pages of crawled HTML pages",
+          "request_summary": "",
+          "response_summary": "example: GET http://127.0.0.1:5001/ — header not present",
+          "detail": {}
+        }
+      ],
+      "remediation": "Set the recommended headers at the application or reverse-proxy layer. Prioritize Content-Security-Policy and Strict-Transport-Security on authentication and payment surfaces.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/"
+      ],
+      "cwe": "CWE-693",
+      "owasp": "A05:2021-Security Misconfiguration",
+      "source_plugin": "vf2-passive-security-headers",
+      "manual_verification": "",
+      "impact": "",
+      "id": "VF2-9fa1c3fbffd5",
+      "created_at": 1789709178.231836,
+      "simple_summary": "The site does not send the 'Permissions-Policy' protection header.",
+      "why_it_matters": "Browsers get less guidance on how to safely handle the site, which makes some other attacks easier to perform."
+    }
+  ],
+  "audit_log": [
+    {
+      "ts": 1789709178.0566459,
+      "iso": "2026-09-18T05:26:18",
+      "action": "scan_start",
+      "detail": "target=http://127.0.0.1:5001 profile=lab",
+      "url": ""
+    }
+  ]
+}

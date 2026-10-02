@@ -1,0 +1,19 @@
+{
+  "workflow_id": "authorized-account-navigation",
+  "transitions": [
+    {
+      "transition_id": "home-to-profile",
+      "from": "/",
+      "to": "/profile",
+      "method": "GET",
+      "expected_status": [200]
+    },
+    {
+      "transition_id": "profile-to-settings",
+      "from": "/profile",
+      "to": "/settings",
+      "method": "GET",
+      "expected_status": [200, 302]
+    }
+  ]
+}

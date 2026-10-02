@@ -1,0 +1,12 @@
+{
+  "allowed_hosts": ["127.0.0.1"],
+  "allowed_ips": ["127.0.0.1/32", "::1/128"],
+  "allowed_ports": [8765],
+  "allowed_prefixes": ["http://127.0.0.1:8765/"],
+  "excluded_hosts": [],
+  "excluded_paths": ["^/logout(?:/|$)", "^/admin/delete(?:/|$)"],
+  "excluded_params": ["csrf_token", "password", "current_password"],
+  "allowed_methods": ["GET", "HEAD", "OPTIONS"],
+  "not_before": null,
+  "expires_at": null
+}

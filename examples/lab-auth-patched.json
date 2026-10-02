@@ -1,0 +1,21 @@
+{
+  "identities": {
+    "owner": {"headers": {"X-Lab-User": "alice"}},
+    "other": {"headers": {"X-Lab-User": "bob"}}
+  },
+  "authorization_tests": [
+    {
+      "url": "/api/orders-isolated?id=1001",
+      "owner_identity": "owner",
+      "other_identity": "other",
+      "owner_field": "owner",
+      "owner_value": "alice",
+      "identity_assertion": {
+        "header": "X-Lab-Principal",
+        "owner_value": "alice",
+        "other_value": "bob"
+      },
+      "sensitive_fields": ["email"]
+    }
+  ]
+}

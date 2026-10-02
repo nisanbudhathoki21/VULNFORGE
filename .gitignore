@@ -1,0 +1,98 @@
+# ==========================================
+#  VULNFORGE canonical source repository
+# ==========================================
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv-*/
+
+# Test / tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# Real auth/scope configs for live targets (examples/ templates are fine to commit)
+configs/*
+!configs/.gitkeep
+!configs/README.md
+*-auth.json
+*.auth.json
+!examples/*-auth*.json
+*-auth.local.*
+auth.local.*
+
+# SQLite Databases & WAL journal files (keep runtime WAL/temp DBs ignored; allow canonical project .db)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+.preview-*.db
+!vulnforge.db
+!data/vulnforge.db
+
+# Generated Security Assessment Reports
+*.pdf
+*.md
+!README.md
+!docs/ARCHITECTURE_MAP.md
+!docs/*.md
+!docs/**/*.md
+reports/
+vulnforge_reports/
+test_report.*
+mock_report.*
+*.xml
+
+# Log files & runtime telemetry
+*.log
+requests_log.txt
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Packaging, builds & setuptools
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Temporary installer / helper scripts
+apply_update.py
+install_full.py
+install_all_modules.py
+make_installer.py
+fix_modules.py
+setup_live_dashboard.py
+update_with_verifier.py
+update_cli_db.py
+
+# OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

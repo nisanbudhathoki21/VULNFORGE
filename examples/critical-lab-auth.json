@@ -1,0 +1,21 @@
+{
+  "identities": {
+    "administrator": {"headers": {"X-Lab-User": "admin"}},
+    "member": {"headers": {"X-Lab-User": "alice"}}
+  },
+  "authorization_tests": [
+    {
+      "url": "/api/admin/settings",
+      "owner_identity": "administrator",
+      "other_identity": "member",
+      "owner_field": "owner",
+      "owner_value": "admin",
+      "identity_assertion": {
+        "header": "X-Lab-Principal",
+        "owner_value": "admin",
+        "other_value": "alice"
+      },
+      "sensitive_fields": ["feature_flags"]
+    }
+  ]
+}

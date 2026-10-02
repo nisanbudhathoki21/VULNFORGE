@@ -1,0 +1,17 @@
+{
+  "headers": {},
+  "browser_workflows": [
+    {
+      "workflow_id": "authorized-account-navigation",
+      "start_url": "/account",
+      "max_requests": 12,
+      "step_timeout_ms": 5000,
+      "steps": [
+        {"step_id": "account-view", "action": "assert_selector", "selector": "main"},
+        {"step_id": "settings-navigation", "action": "navigate", "url": "/account/settings"},
+        {"step_id": "settings-route", "action": "assert_url", "path": "/account/settings"},
+        {"step_id": "settings-content", "action": "assert_selector", "selector": "h1"}
+      ]
+    }
+  ]
+}

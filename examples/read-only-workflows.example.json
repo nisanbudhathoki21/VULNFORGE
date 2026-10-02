@@ -1,0 +1,13 @@
+{
+  "headers": {},
+  "workflow_tests": [
+    {
+      "workflow_id": "home-to-about",
+      "stop_on_mismatch": true,
+      "steps": [
+        {"step_id": "home", "method": "GET", "url": "/", "expected_status": 200},
+        {"step_id": "about", "method": "GET", "url": "/about", "expected_status": [200]}
+      ]
+    }
+  ]
+}

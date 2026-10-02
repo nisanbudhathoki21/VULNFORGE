@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vulnforge-report-v1.schema.json",
+  "title": "VulnForge structured assessment report",
+  "description": "Versioned, redacted report document produced from one persisted VULNFORGE scan. VERIFIED findings require linked validation evidence; legacy confirmed labels are retained as candidates.",
+  "type": "object",
+  "required": ["schema_version", "tool", "version", "scan", "statistics", "scope", "findings", "candidates", "hypotheses", "tests", "endpoints", "parameters", "vulnerability_matrix"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "tool": {"const": "VulnForge"},
+    "version": {"type": "string"},
+    "disclaimer": {"type": "string"},
+    "scan": {
+      "type": "object",
+      "required": ["scan_id", "target", "profile", "started_at", "status"],
+      "properties": {
+        "scan_id": {"type": "string"},
+        "target": {"type": "string"},
+        "profile": {"type": "string"},
+        "status": {"type": "string", "description": "Lifecycle status retained from the scan record."},
+        "started_at": {"type": ["number", "null"]},
+        "duration_s": {"type": ["number", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "statistics": {"type": "object"},
+    "scope": {"type": "object"},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "verified_findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "candidates": {"type": "array", "items": {"type": "object"}},
+    "hypotheses": {"type": "array", "items": {"type": "object"}},
+    "tests": {"type": "array", "items": {"type": "object"}},
+    "endpoints": {"type": "array", "items": {"type": "object"}},
+    "parameters": {"type": "array", "items": {"type": "object"}},
+    "vulnerability_matrix": {"type": "array", "items": {"type": "object"}},
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "events": {"type": "array", "items": {"type": "object"}}
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["title", "status"],
+      "properties": {
+        "title": {"type": "string"},
+        "status": {"type": "string", "description": "Finding lifecycle. Legacy confirmations are normalized to CANDIDATE unless current evidence validates them."},
+        "severity": {"type": "string"},
+        "confidence": {"type": ["number", "string", "null"]},
+        "evidence": {"type": "array"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

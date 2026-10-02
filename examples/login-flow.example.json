@@ -1,0 +1,11 @@
+{
+  "login_url": "https://authorized.example/login",
+  "username": "test-account@example.com",
+  "password": "replace-with-real-value-in-your-own-configs-copy",
+  "username_field": "email",
+  "password_field": "password",
+  "method": "POST",
+  "success_status": 302,
+  "failure_text": "Invalid email or password",
+  "_comment": "csrf_field is auto-detected from a hidden <input> on the login page if omitted. Copy this file into configs/ (gitignored) and fill in real values there — never commit real credentials here."
+}
