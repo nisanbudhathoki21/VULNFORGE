@@ -877,6 +877,7 @@ class TestPlanningStage(Stage):
         from ..core.models import PlannedTest
         from ..core.profiles import get_profile
         from .methodology import build_test_methodology
+        from .strategy_registry import select_strategies, strategy_public_dict
         from .vulnerability_registry import VULNERABILITY_CLASSES, build_vulnerability_matrix
         from .verification import expand_authorization_specs
         specs=expand_authorization_specs(ctx.config.auth_data)
@@ -898,13 +899,50 @@ class TestPlanningStage(Stage):
         reserved=0
         budget=getattr(getattr(ctx,"requester",None),"budget",None)
         available=(budget.max_requests-budget.sent) if budget else profile.max_requests
+
+        def attach_strategy(methodology, vulnerability_class, *, surface=None, capabilities=()):
+            strategies = select_strategies(
+                vulnerability_class,
+                surface=surface,
+                observed_capabilities=capabilities,
+                active_requested=bool(ctx.config.active_requested),
+            )
+            if strategies:
+                strategy = strategies[0]
+                methodology["strategy"] = strategy_public_dict(strategy)
+                methodology["strategy_selection"] = {
+                    "status": "APPLICABLE",
+                    "strategy_id": strategy.strategy_id,
+                    "source": "central-strategy-registry",
+                }
+            else:
+                methodology["strategy_selection"] = {
+                    "status": "NO_APPLICABLE_STRATEGY",
+                    "source": "central-strategy-registry",
+                }
+            return methodology
+
         if bola_selected:
             for spec,hypothesis in zip(specs,bola_hypotheses):
                 enough=reserved+3<=available
                 plan_status="PLANNED" if can_run and enough else "BLOCKED"
+                methodology=build_test_methodology(
+                    "cross-account-object-authorization",
+                    str(spec.get("url","")),
+                )
+                methodology=attach_strategy(
+                    methodology,
+                    "bola",
+                    surface="api",
+                    capabilities=(
+                        "two researcher-supplied identities",
+                        "owner invariant",
+                        "sensitive fields",
+                    ),
+                )
                 planned=PlannedTest("test-"+uuid.uuid4().hex[:12],hypothesis.hypothesis_id,
                     "cross-account-object-authorization",str(spec.get("url","")),"GET",3,"LOW_READ_ONLY",True,
-                    plan_status,methodology=build_test_methodology("cross-account-object-authorization",str(spec.get("url",""))))
+                    plan_status,methodology=methodology)
                 ctx.test_plan.append(planned)
                 if plan_status=="PLANNED":
                     ctx._authorization_test_specs.append(spec);reserved+=3
@@ -919,6 +957,12 @@ class TestPlanningStage(Stage):
                 if not allowed:
                     hypothesis.status="BLOCKED"
                 methodology=build_test_methodology("cors-origin-reflection",hypothesis.endpoint)
+                methodology=attach_strategy(
+                    methodology,
+                    "cors",
+                    surface="web",
+                    capabilities=("observed in-scope GET endpoint",),
+                )
                 if can_run and not enough:
                     methodology["status"]="BLOCKED_BUDGET"
                     methodology["planning_note"]="Three requests do not fit within the remaining request budget."
@@ -939,6 +983,12 @@ class TestPlanningStage(Stage):
                 allowed,reason=ctx.authorization.check(hypothesis.endpoint,purpose="open-redirect-test-plan",method="GET")
                 plan_status="PLANNED" if enough and allowed else "BLOCKED"
                 methodology=build_test_methodology("open-redirect-validation",hypothesis.endpoint)
+                methodology=attach_strategy(
+                    methodology,
+                    "open_redirect",
+                    surface="web",
+                    capabilities=("observed redirect-like parameter",),
+                )
                 if not enough:
                     methodology["status"]="BLOCKED_BUDGET"
                     methodology["planning_note"]="The paired two-request check does not fit within the remaining request budget."
@@ -962,6 +1012,12 @@ class TestPlanningStage(Stage):
                 allowed,reason=ctx.authorization.check(candidate["url"],purpose="sql-injection-test-plan",method="GET")
                 plan_status="PLANNED" if can_run and enough and allowed else "BLOCKED"
                 methodology=build_test_methodology("sql-injection-validation",hypothesis.endpoint)
+                methodology=attach_strategy(
+                    methodology,
+                    "sqli",
+                    surface="api",
+                    capabilities=("observed non-sensitive query value",),
+                )
                 if not can_run:
                     methodology["status"]="BLOCKED_ACTIVE_MODE"
                     methodology["planning_note"]="Explicit active request and an active-capable safety mode are required."
@@ -1216,11 +1272,21 @@ def _base(url: str) -> str:
     return f"{p.scheme}://{p.netloc}"
 
 
-async def _run_async(config: ScanConfig, authorization, event_fn: Optional[Callable] = None) -> ScanResult:
+async def _run_async(
+    config: ScanConfig,
+    authorization,
+    event_fn: Optional[Callable] = None,
+    identity_manager=None,
+) -> ScanResult:
     from pathlib import Path
     from ..core.phases import PhaseTracker
     from ..http.client import ScanAborted
-    ctx = ScanContext(scan_id=config.scan_id or ("vf-" + uuid.uuid4().hex[:12]), config=config, authorization=authorization)
+    ctx = ScanContext(
+        scan_id=config.scan_id or ("vf-" + uuid.uuid4().hex[:12]),
+        config=config,
+        authorization=authorization,
+        identity_manager=identity_manager,
+    )
     if event_fn: ctx.on_event(event_fn)
     tracker=PhaseTracker(); ctx.phases=tracker.phases
     result=ScanResult(context=ctx)
@@ -1280,6 +1346,18 @@ async def _run_async(config: ScanConfig, authorization, event_fn: Optional[Calla
     return result
 
 
-def run_scan(config: ScanConfig, authorization, event_fn: Optional[Callable] = None) -> ScanResult:
+def run_scan(
+    config: ScanConfig,
+    authorization,
+    event_fn: Optional[Callable] = None,
+    identity_manager=None,
+) -> ScanResult:
     """Synchronous entry point used by the CLI."""
-    return asyncio.run(_run_async(config, authorization, event_fn))
+    return asyncio.run(
+        _run_async(
+            config,
+            authorization,
+            event_fn,
+            identity_manager,
+        )
+    )
