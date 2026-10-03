@@ -98,6 +98,77 @@ class Handler(BaseHTTPRequestHandler):
             self._send("<html><body>report</body></html>")
         elif path == "/auth-required":
             self._send("<html><body>login required</body></html>", "text/html", status=401)
+        elif path == "/authz/protected-orders":
+            user = self.headers.get("X-Lab-User", "anonymous")
+            if user != "alice":
+                self._send(
+                    '{"error":"forbidden"}',
+                    "application/json",
+                    status=403,
+                    extra={"X-Lab-Principal": user},
+                )
+            else:
+                self._send(
+                    '{"owner":"alice","email":"alice@example.test","item":"controlled-order"}',
+                    "application/json",
+                    extra={"X-Lab-Principal": user},
+                )
+
+        elif path == "/authz/matrix-object":
+            object_id = parse_qs(
+                urlsplit(self.path).query
+            ).get("id", [""])[0]
+
+            user = self.headers.get(
+                "X-Lab-User",
+                "anonymous",
+            )
+
+            matrix = {
+                "alice-1": {
+                    "owner": "alice",
+                    "allowed": {"admin"},
+                },
+                "bob-1": {
+                    "owner": "bob",
+                    "allowed": {"bob", "admin"},
+                },
+            }
+
+            obj = matrix.get(object_id)
+
+            if obj is None:
+                self._send(
+                    '{"error":"not-found"}',
+                    "application/json",
+                    status=404,
+                    extra={
+                        "X-Lab-Principal": user,
+                    },
+                )
+            elif user not in obj["allowed"]:
+                self._send(
+                    '{"error":"forbidden"}',
+                    "application/json",
+                    status=403,
+                    extra={
+                        "X-Lab-Principal": user,
+                    },
+                )
+            else:
+                owner = obj["owner"]
+
+                self._send(
+                    (
+                        '{{"owner":"{}","email":"{}@example.test",'
+                        '"item":"matrix-object"}}'
+                    ).format(owner, owner),
+                    "application/json",
+                    extra={
+                        "X-Lab-Principal": user,
+                    },
+                )
+
         elif path == "/authz/orders":
             self._send('{"owner":"alice","email":"alice@example.test","item":"controlled-order"}', "application/json", extra={"X-Lab-Principal":self.headers.get("X-Lab-User","anonymous")})
         elif path == "/cors/reflect":
