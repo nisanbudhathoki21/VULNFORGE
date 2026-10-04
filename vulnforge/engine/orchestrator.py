@@ -956,7 +956,7 @@ class TestPlanningStage(Stage):
                 plan_status="PLANNED" if can_run and enough and allowed else "BLOCKED"
                 if not allowed:
                     hypothesis.status="BLOCKED"
-                methodology=build_test_methodology("cors-origin-reflection",hypothesis.endpoint)
+                methodology=build_test_methodology("cors-unified",hypothesis.endpoint)
                 methodology=attach_strategy(
                     methodology,
                     "cors",
@@ -970,7 +970,7 @@ class TestPlanningStage(Stage):
                     methodology["status"]="BLOCKED_SCOPE"
                     methodology["planning_note"]=reason
                 planned=PlannedTest("test-"+uuid.uuid4().hex[:12],hypothesis.hypothesis_id,
-                    "cors-origin-reflection",hypothesis.endpoint,"GET",3,"LOW_READ_ONLY",True,
+                    "cors-unified",hypothesis.endpoint,"GET",8,"LOW_READ_ONLY",True,
                     plan_status,methodology=methodology)
                 ctx.test_plan.append(planned)
                 if plan_status=="PLANNED":
@@ -1008,7 +1008,7 @@ class TestPlanningStage(Stage):
             for hypothesis in sql_hypotheses[:3]:
                 candidate=candidates.get(hypothesis.hypothesis_id)
                 if not candidate: continue
-                enough=reserved+4<=available
+                enough=reserved+6<=available
                 allowed,reason=ctx.authorization.check(candidate["url"],purpose="sql-injection-test-plan",method="GET")
                 plan_status="PLANNED" if can_run and enough and allowed else "BLOCKED"
                 methodology=build_test_methodology("sql-injection-validation",hypothesis.endpoint)
@@ -1023,17 +1023,17 @@ class TestPlanningStage(Stage):
                     methodology["planning_note"]="Explicit active request and an active-capable safety mode are required."
                 elif not enough:
                     methodology["status"]="BLOCKED_BUDGET"
-                    methodology["planning_note"]="Four bounded control/probe requests do not fit within the remaining budget."
+                    methodology["planning_note"]="Six bounded control/probe requests do not fit within the remaining budget."
                 elif not allowed:
                     methodology["status"]="BLOCKED_SCOPE"
                     methodology["planning_note"]=reason
                 planned=PlannedTest("test-"+uuid.uuid4().hex[:12],hypothesis.hypothesis_id,
-                    "sql-injection-validation",hypothesis.endpoint,"GET",4,"LOW_READ_ONLY",True,
+                    "sql-injection-validation",hypothesis.endpoint,"GET",6,"LOW_READ_ONLY",True,
                     plan_status,methodology=methodology)
                 ctx.test_plan.append(planned)
                 if plan_status=="PLANNED":
                     ctx._sql_injection_test_specs.append({**candidate,"test_id":planned.test_id})
-                    reserved+=4
+                    reserved+=6
         if sql_hypotheses and not sqli_selected:
             ctx.emit("stage",f"SQL input leads retained as review hypotheses; no SQLi checks selected by `{test_profile}` portfolio")
         if sqli_selected and sql_hypotheses and not can_run:

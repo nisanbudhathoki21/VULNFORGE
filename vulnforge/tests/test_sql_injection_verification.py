@@ -32,7 +32,7 @@ def _context(url):
     ctx.hypotheses=[HypothesisRecord(hypothesis_id,"sql-injection-review","KEEP",
         endpoint=safe_endpoint,parameter="q",reason="Observed non-sensitive query parameter.")]
     ctx.test_plan=[PlannedTest("test-sqli",hypothesis_id,"sql-injection-validation",safe_endpoint,
-        "GET",4,"LOW_READ_ONLY",True,"PLANNED",
+        "GET",6,"LOW_READ_ONLY",True,"PLANNED",
         methodology=build_test_methodology("sql-injection-validation",safe_endpoint))]
     ctx._sql_injection_test_specs=[{"test_id":"test-sqli","hypothesis_id":hypothesis_id,
         "url":url,"parameter":"q","value":"shoe"}]
@@ -65,12 +65,20 @@ def test_sql_error_positive_requires_baseline_benign_control_and_repeatable_pars
     asyncio.run(run())
     record=ctx.tests[0]
     assert record["status"]=="CANDIDATE"
-    assert record["reproduction_status"]=="REPRODUCED"
+    # A parser error alone is insufficient for the new semantic verifier.
+    # The fixture deliberately has no true/false query-result differential.
+    assert record["reproduction_status"]=="CANDIDATE"
     assert record["impact_proven"] is False
-    assert "does not prove altered query semantics" in record["candidate_reason"]
+    assert record["candidate_reason"] == "The bounded semantic verification contract was not satisfied."
     assert [item["kind"] for item in record["observations"]]==[
-        "baseline","benign-control","single-quote-probe","single-quote-repeat"]
-    assert len(ctx.requester.exchanges)==4 and ctx.requester.budget.sent==4
+        "baseline",
+        "benign-control",
+        "boolean-true",
+        "boolean-false",
+        "boolean-true-repeat",
+        "single-quote-probe",
+    ]
+    assert len(ctx.requester.exchanges)==6 and ctx.requester.budget.sent==6
     assert all(item.module=="sql-injection-validation" for item in ctx.requester.exchanges)
     assert ctx.findings==[]
     assert record["data_extraction_attempted"] is False and record["state_changes_attempted"] is False
@@ -143,10 +151,10 @@ def test_full_scan_validates_sqli_against_loopback_vulnerable_lab():
         server.shutdown(); server.server_close(); thread.join(timeout=2)
     ctx=result.context
     plans=[plan for plan in ctx.test_plan if plan.test_type=="sql-injection-validation"]
-    assert plans and all(plan.request_cost==4 for plan in plans)
+    assert plans and all(plan.request_cost==6 for plan in plans)
     assert len(plans)<=3
     records=[test for test in ctx.tests if test.get("type")=="sql-injection-validation"]
-    assert records and any(test["reproduction_status"]=="REPRODUCED" for test in records)
+    assert records and any(test["reproduction_status"]=="CANDIDATE" for test in records)
     assert all(test["status"] in {"CANDIDATE","INCOMPLETE"} for test in records)
     matrix=next(item for item in ctx.vulnerability_matrix if item["class_id"]=="sqli")
     assert matrix["supported"] and matrix["selected"]

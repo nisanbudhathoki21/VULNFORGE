@@ -40,7 +40,7 @@ METHOD_CARDS: Dict[str, Dict[str, Any]] = {
         "negative_controls": ["Identity assertion must distinguish owner from non-owner", "Invalid or non-JSON responses do not verify the hypothesis"],
         "expected_evidence": ["Three linked exchange IDs", "HTTP statuses", "Identity assertion results", "Owner/sensitive-field assertions", "Response digests"],
         "stop_conditions": ["Authorization scope denial", "Request budget exhaustion", "Cancellation", "Invalid/missing identity configuration"],
-        "permitted_methods": ["GET"], "request_cost": 3, "risk": "LOW_READ_ONLY",
+        "permitted_methods": ["GET", "OPTIONS"], "request_cost": 8, "risk": "LOW_READ_ONLY",
         "limitations": ["Does not infer identity roles or object ownership", "Only the explicitly configured URL and fields are assessed"],
     },
     "sql-injection-validation": {
@@ -69,8 +69,8 @@ METHOD_CARDS: Dict[str, Dict[str, Any]] = {
         "permitted_methods": ["GET"], "request_cost": 2, "risk": "LOW_READ_ONLY",
         "limitations": ["Does not follow the redirect or visit the reserved marker host", "Does not prove phishing success, credential theft, or business impact"],
     },
-    "cors-origin-reflection": {
-        "methodology_id": "VF-METHOD-CORS-1",
+    "cors-unified": {
+        "methodology_id": "VF-METHOD-CORS",
         "title": "Read-only credentialed CORS origin-reflection check",
         "objective": "Verify whether an in-scope GET response reflects multiple unrelated test origins while allowing credentials.",
         "rationale": "A single ACAO header can be an intentional allowlist; identical reflection behavior for three distinct reserved .invalid origins is stronger evidence of a broad reflection policy.",
@@ -79,7 +79,7 @@ METHOD_CARDS: Dict[str, Dict[str, Any]] = {
         "negative_controls": ["A fixed allowlisted origin does not satisfy reflection for all three test origins", "Wildcard ACAO without ACAC=true is not reported as credentialed reflection", "Errors, redirects, scope denials, and partial runs do not verify"],
         "expected_evidence": ["Three linked GET exchange IDs", "Each request Origin", "ACAO and ACAC response headers", "Status and Vary header"],
         "stop_conditions": ["Authorization scope denial", "Request budget exhaustion", "Cancellation", "Non-2xx response"],
-        "permitted_methods": ["GET"], "request_cost": 3, "risk": "LOW_READ_ONLY",
+        "permitted_methods": ["GET", "OPTIONS"], "request_cost": 8, "risk": "LOW_READ_ONLY",
         "limitations": ["Verifies response policy headers only; does not prove browser execution, sensitive-data access, cookie delivery, or user impact"],
     },
 }

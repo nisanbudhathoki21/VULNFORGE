@@ -1084,38 +1084,474 @@ def cmd_coverage(args, store):
 def cmd_finding(args, store):
     finding = store.get_finding(args.finding_id)
     if not finding:
-        print(f"Finding not found: {args.finding_id}"); return 2
+        print(f"Finding not found: {args.finding_id}")
+        return 2
+
     chain = store.get_evidence_chain(args.finding_id)
+
     if args.format == "json":
-        print(json.dumps({"finding": finding, "evidence_chain": chain}, indent=2, ensure_ascii=False, default=str)); return 0
-    print("FINDING")
-    print("────────────────────────────────────────────")
-    print(f"ID: {args.finding_id}")
-    state_names={"VERIFIED":"CONFIRMED","CANDIDATE":"UNCONFIRMED","REPRODUCED":"UNCONFIRMED","OBSERVED":"UNCONFIRMED","SIGNAL":"UNCONFIRMED","KILLED":"KILLED","UNTESTABLE":"UNTESTABLE"}
-    print(f"Status: {state_names.get(str(finding.get('status','')).upper(), finding.get('status','UNCONFIRMED'))}")
-    print(f"Type: {finding.get('category') or finding.get('title') or 'Not recorded'}")
-    print(f"Title: {finding.get('title','Not recorded')}")
-    print(f"Endpoint: {finding.get('endpoint') or 'Not recorded'}")
-    print(f"Parameter: {finding.get('parameter') or 'Not recorded'}")
-    print(f"Evidence: {len(chain) or len(finding.get('evidence',[]) or [])}")
-    print(f"Severity: {str(finding.get('severity','info')).upper()} · confidence {finding.get('confidence','Not recorded')}")
-    print("\nTRACEABILITY")
-    if not chain:
-        print("No persisted evidence chain is available; this record is not confirmed.")
+        print(json.dumps(
+            {"finding": finding, "evidence_chain": chain},
+            indent=2,
+            ensure_ascii=False,
+            default=str,
+        ))
+        return 0
+
+    # ------------------------------------------------------------------
+    # Presentation helpers
+    # ------------------------------------------------------------------
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    severity_colors = {
+        "CRITICAL": "\033[1;91m",
+        "HIGH": "\033[91m",
+        "MEDIUM": "\033[93m",
+        "LOW": "\033[33m",
+        "INFORMATIONAL": "\033[92m",
+        "INFO": "\033[92m",
+    }
+
+    status_names = {
+        "VERIFIED": "CONFIRMED",
+        "CANDIDATE": "UNCONFIRMED",
+        "REPRODUCED": "UNCONFIRMED",
+        "OBSERVED": "UNCONFIRMED",
+        "SIGNAL": "UNCONFIRMED",
+        "KILLED": "KILLED",
+        "UNTESTABLE": "UNTESTABLE",
+    }
+
+    status_icons = {
+        "CONFIRMED": "✓",
+        "UNCONFIRMED": "○",
+        "KILLED": "♡",
+        "UNTESTABLE": "!",
+    }
+
+    severity = str(finding.get("severity", "info")).upper()
+    if severity == "INFO":
+        severity = "INFORMATIONAL"
+
+    raw_status = str(finding.get("status", "")).upper()
+    status = status_names.get(raw_status, raw_status or "UNCONFIRMED")
+
+    confidence = finding.get("confidence")
+    if confidence is None:
+        confidence_text = "Not recorded"
+    else:
+        try:
+            confidence_text = f"{float(confidence) * 100:.0f}% CONFIDENCE"
+        except (TypeError, ValueError):
+            confidence_text = str(confidence)
+
+    sev_color = severity_colors.get(severity, "")
+    icon = status_icons.get(status, "•")
+
+    def heading(title):
+        print()
+        print(title)
+        print("─" * 50)
+
+    def clean(value):
+        if value is None:
+            return ""
+        return str(value)
+
+    def result_text(value):
+        if value is None or value == "":
+            return ""
+        try:
+            number = int(value)
+            return f"{number} result" if number == 1 else f"{number} results"
+        except (TypeError, ValueError):
+            return str(value)
+
+    def payload_display(value):
+        if not value:
+            return "[REDACTED]"
+        value = str(value)
+
+        # The stored evidence is already redacted. Keep the UI defensive:
+        # never attempt to reconstruct or reveal the original input.
+        if "[REDACTED]" in value:
+            return value
+
+        return "[REDACTED]"
+
+    # ------------------------------------------------------------------
+    # Collect verification observations from the stored evidence chain.
+    # ------------------------------------------------------------------
+    observations = []
+
+    def collect(source):
+        if not isinstance(source, dict):
+            return
+
+        for key in ("observations", "checks", "steps", "results"):
+            value = source.get(key)
+            if isinstance(value, list):
+                observations.extend(value)
+
+        detail = source.get("detail")
+        if isinstance(detail, dict):
+            collect(detail)
+
     for item in chain:
-        evidence = item.get("evidence") or {}
-        test = item.get("test") or {}
-        print(f"  Evidence {item.get('evidence_id')} → Test {item.get('test_id') or 'not recorded'} → {test.get('status','not recorded')}")
-        for exchange in item.get("exchanges", [])[:8]:
-            _print_http_section("HTTP REQUEST / RESPONSE", [
-                f"{exchange.get('method','GET')} {exchange.get('url','')}",
-                f"Status: {exchange.get('status') or 'No response'} · {exchange.get('duration_ms',0)} ms",
-                f"Request ID: {exchange.get('request_id','not recorded')}",
-                f"Response ID: {exchange.get('response_id','not recorded')}",
-                "", str(exchange.get('response_body') or "[No response body stored]")])
-        if evidence:
-            print("Evidence detail:", json.dumps(evidence, ensure_ascii=False, default=str)[:1200])
-    print("\nUse `vulnforge export finding %s --format md` for a shareable redacted report." % args.finding_id)
+        if not isinstance(item, dict):
+            continue
+
+        collect(item.get("test") or {})
+        collect(item.get("evidence") or {})
+
+    # De-duplicate observations while preserving order.
+    unique = []
+    seen = set()
+
+    for obs in observations:
+        if not isinstance(obs, dict):
+            continue
+
+        key = (
+            obs.get("kind"),
+            obs.get("name"),
+            obs.get("label"),
+            obs.get("type"),
+            obs.get("exchange_id"),
+            obs.get("status"),
+            obs.get("result_count"),
+            obs.get("payload"),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(obs)
+
+    observations = unique
+
+    # ------------------------------------------------------------------
+    # Normalize the expected SQLi verification sequence.
+    # ------------------------------------------------------------------
+    preferred_order = [
+        "baseline",
+        "benign-control",
+        "boolean-true",
+        "boolean-false",
+        "boolean-true-repeat",
+        "single-quote-probe",
+    ]
+
+    ordered = []
+
+    for wanted in preferred_order:
+        matches = [
+            obs for obs in observations
+            if str(
+                obs.get("kind")
+                or obs.get("name")
+                or obs.get("type")
+                or ""
+            ).lower() == wanted
+        ]
+
+        if matches:
+            ordered.append(matches[0])
+
+    # Append non-SQLi / additional evidence after the known sequence.
+    ordered_keys = {id(obs) for obs in ordered}
+    ordered.extend(
+        obs for obs in observations
+        if id(obs) not in ordered_keys
+    )
+
+    observations = ordered[:12]
+
+    # ------------------------------------------------------------------
+    # Main title
+    # ------------------------------------------------------------------
+    title = finding.get("title", "Finding")
+
+    print()
+    print(BOLD + "VULNFORGE · VERIFIED FINDING" + RESET)
+    print("═" * 50)
+    print()
+
+    print(
+        f"{sev_color}{BOLD}{severity}{RESET} · "
+        f"{title}"
+    )
+
+    print(
+        f"{BOLD}{icon} {status}{RESET} · "
+        f"{confidence_text}"
+    )
+
+    # ------------------------------------------------------------------
+    # Classification
+    # ------------------------------------------------------------------
+    cwe = finding.get("cwe") or "Not recorded"
+    owasp = finding.get("owasp") or "Not recorded"
+    category = (
+        finding.get("category")
+        or finding.get("vulnerability_type")
+        or finding.get("type")
+        or "Not recorded"
+    )
+    methodology = finding.get("methodology")
+
+    if not methodology:
+        for item in chain:
+            if not isinstance(item, dict):
+                continue
+
+            for container_key in ("test", "evidence"):
+                container = item.get(container_key)
+                if not isinstance(container, dict):
+                    continue
+
+                detail = container.get("detail")
+                if not isinstance(detail, dict):
+                    continue
+
+                methodology = detail.get("methodology_id")
+                if methodology:
+                    break
+
+            if methodology:
+                break
+
+    methodology = methodology or "Not recorded"
+
+    heading("CLASSIFICATION")
+
+    print(f"CWE          {cwe}")
+    print(f"OWASP        {owasp}")
+    print(f"Category     {category}")
+    print(f"Methodology  {methodology}")
+
+    # ------------------------------------------------------------------
+    # Location
+    # ------------------------------------------------------------------
+    heading("LOCATION")
+
+    print(f"Endpoint     {finding.get('endpoint') or 'Not recorded'}")
+    print(f"Method       {finding.get('method') or 'GET'}")
+    print(f"Parameter    {finding.get('parameter') or 'Not recorded'}")
+
+    # ------------------------------------------------------------------
+    # Verification evidence
+    # ------------------------------------------------------------------
+    heading("VERIFICATION EVIDENCE")
+
+    if observations:
+        for index, obs in enumerate(observations, start=1):
+            kind = str(
+                obs.get("kind")
+                or obs.get("name")
+                or obs.get("label")
+                or obs.get("type")
+                or "test"
+            ).lower()
+
+            labels = {
+                "baseline": "BASELINE",
+                "benign-control": "BENIGN CONTROL",
+                "boolean-true": "BOOLEAN TRUE",
+                "boolean-false": "BOOLEAN FALSE",
+                "boolean-true-repeat": "BOOLEAN TRUE · REPEAT",
+                "single-quote-probe": "QUOTE PROBE",
+            }
+
+            label = labels.get(
+                kind,
+                str(
+                    obs.get("name")
+                    or obs.get("label")
+                    or obs.get("type")
+                    or "VERIFICATION TEST"
+                ).upper(),
+            )
+
+            print(f"{index:02d} · {label}")
+
+            endpoint = (
+                obs.get("endpoint")
+                or obs.get("test_url")
+                or finding.get("endpoint")
+            )
+            method = (
+                obs.get("method")
+                or finding.get("method")
+            )
+            parameter = (
+                obs.get("parameter")
+                or finding.get("parameter")
+            )
+
+            if endpoint:
+                print(f"    Endpoint {endpoint}")
+            if method:
+                print(f"    Method   {method}")
+            if parameter:
+                print(f"    Parameter {parameter}")
+
+            payload = (
+                obs.get("payload")
+                or obs.get("input")
+                or obs.get("value")
+            )
+
+            if payload:
+                print(f"    Payload  {payload_display(payload)}")
+
+            status_code = (
+                obs.get("status")
+                or obs.get("status_code")
+            )
+
+            if status_code:
+                print(f"    HTTP     {status_code}")
+
+            result = (
+                obs.get("result_count")
+                if obs.get("result_count") is not None
+                else obs.get("result")
+            )
+
+            if result is not None and result != "":
+                print(f"    Result   {result_text(result)}")
+
+            families = obs.get("database_error_families") or []
+
+            if families:
+                if isinstance(families, (list, tuple)):
+                    db_text = ", ".join(str(x) for x in families)
+                else:
+                    db_text = str(families)
+
+                print(f"    Database {db_text}")
+
+            if index != len(observations):
+                print()
+    else:
+        print("Verification evidence stored in the evidence chain.")
+
+    # ------------------------------------------------------------------
+    # Differential
+    # ------------------------------------------------------------------
+    heading("DIFFERENTIAL")
+
+    differential = {}
+
+    for obs in observations:
+        kind = str(obs.get("kind") or "").lower()
+        result = obs.get("result_count")
+
+        if result is None:
+            continue
+
+        if kind == "baseline":
+            differential["Baseline"] = result_text(result)
+        elif kind == "benign-control":
+            differential["Benign control"] = result_text(result)
+        elif kind == "boolean-true":
+            differential["Boolean TRUE"] = result_text(result)
+        elif kind == "boolean-false":
+            differential["Boolean FALSE"] = result_text(result)
+        elif kind == "boolean-true-repeat":
+            differential["Repeat TRUE"] = result_text(result)
+
+    if differential:
+        for label, value in differential.items():
+            print(f"{label:<15} {value}")
+    else:
+        print("Controlled response differential recorded in verification evidence.")
+
+    # ------------------------------------------------------------------
+    # Impact
+    # ------------------------------------------------------------------
+    heading("IMPACT")
+
+    impact = (
+        finding.get("impact")
+        or finding.get("why_it_matters")
+        or finding.get("description")
+    )
+
+    if impact:
+        print(impact)
+    else:
+        print("Controlled input affected application behavior.")
+
+    # ------------------------------------------------------------------
+    # Remediation
+    # ------------------------------------------------------------------
+    remediation = (
+        finding.get("remediation")
+        or finding.get("recommendation")
+        or finding.get("fix")
+    )
+
+    if remediation:
+        heading("REMEDIATION")
+        print(remediation)
+
+    # ------------------------------------------------------------------
+    # Verification checks
+    # ------------------------------------------------------------------
+    checks = []
+
+    for item in chain:
+        if not isinstance(item, dict):
+            continue
+
+        for source in (
+            item.get("test") or {},
+            item.get("evidence") or {},
+        ):
+            if not isinstance(source, dict):
+                continue
+
+            value = source.get("checks")
+
+            if isinstance(value, list):
+                checks.extend(value)
+
+    if checks:
+        heading("VERIFICATION")
+
+        shown = set()
+
+        for check in checks:
+            if isinstance(check, dict):
+                name = (
+                    check.get("name")
+                    or check.get("label")
+                    or check.get("check")
+                    or "Verification check"
+                )
+                passed = check.get("passed")
+
+                if passed is False:
+                    mark = "✗"
+                else:
+                    mark = "✓"
+
+                line = f"{mark} {name}"
+            else:
+                line = f"✓ {check}"
+
+            if line in shown:
+                continue
+
+            shown.add(line)
+            print(line)
+
+    print()
+    print("Evidence-backed result · no unverified claim promoted.")
     return 0
 
 

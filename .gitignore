@@ -96,3 +96,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Runtime databases and generated assessment artifacts
+vulnforge.db
+data/vulnforge.db
+reports/
+backups/

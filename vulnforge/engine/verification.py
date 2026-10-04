@@ -1292,12 +1292,23 @@ async def execute_authorization_tests(ctx: Any) -> None:
         if ctx.stopped:
             break
 
+        # Match the planned test to an authorization test explicitly.
+        # Do not depend on the ordering of unrelated CORS, redirect, or
+        # SQLi plans in the shared test plan.
+        authorization_hypothesis_ids = {
+            str(h.hypothesis_id)
+            for h in getattr(ctx, "hypotheses", [])
+            if getattr(h, "category", "") == "object-level-authorization"
+        }
+
         planned = next(
             (
                 item
                 for item in ctx.test_plan
                 if item.status == "PLANNED"
                 and item.test_id not in executed_test_ids
+                and item.test_type == "cross-account-object-authorization"
+                and str(item.hypothesis_id) in authorization_hypothesis_ids
             ),
             None,
         )
@@ -1317,6 +1328,18 @@ async def execute_authorization_tests(ctx: Any) -> None:
             ),
             "verification_version": VERIFICATION_VERSION,
         }
+
+        # Record the beginning of the real authorization execution.
+        # This is an immutable lifecycle event; final test state is still
+        # reconciled through save_scan().
+        ctx.emit(
+            "test-start",
+            f"Authorization test started: {planned.test_id}",
+            test_id=planned.test_id,
+            hypothesis_id=planned.hypothesis_id,
+            test_type=planned.test_type,
+            status="RUNNING",
+        )
 
         try:
             url = urljoin(
@@ -2038,6 +2061,18 @@ async def execute_authorization_tests(ctx: Any) -> None:
 
         ctx.tests.append(record)
 
+        # Execution is complete, but verification is deliberately separate.
+        # A completed test is NOT automatically a confirmed vulnerability.
+        ctx.emit(
+            "test-complete",
+            f"Authorization test completed: {planned.test_id}",
+            test_id=record.get("test_id"),
+            hypothesis_id=record.get("hypothesis_id"),
+            test_type=record.get("type"),
+            status=record.get("status"),
+            endpoint=record.get("endpoint"),
+        )
+
 
 # ============================================================================
 # Authorization verification
@@ -2226,6 +2261,18 @@ def verify_authorization_tests(ctx: Any) -> None:
             decision.confidence_rationale
         )
 
+        ctx.emit(
+            "verification-result",
+            f"Authorization verification: {decision.status}",
+            test_id=record.get("test_id"),
+            hypothesis_id=record.get("hypothesis_id"),
+            status=decision.status,
+            verified=bool(decision.verified),
+            confidence=decision.confidence,
+            missing=list(decision.missing),
+            reasons=list(decision.reasons),
+        )
+
         # --------------------------------------------------------------------
         # Update hypothesis lifecycle
         # --------------------------------------------------------------------
@@ -2337,6 +2384,19 @@ def verify_authorization_tests(ctx: Any) -> None:
             record["finding_id"] = finding.id
             record["status"] = STATUS_VERIFIED
             record["verification_status"] = STATUS_VERIFIED
+
+            ctx.emit(
+                "finding-created",
+                f"Verified finding created: {finding.id}",
+                finding_id=finding.id,
+                test_id=record.get("test_id"),
+                hypothesis_id=record.get("hypothesis_id"),
+                category=finding.category,
+                severity=finding.severity,
+                confidence=finding.confidence,
+                status=finding.status,
+                endpoint=finding.endpoint,
+            )
         else:
             # Defensive invariant: a failed promotion cannot leave the test
             # marked verified.

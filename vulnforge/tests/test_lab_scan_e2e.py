@@ -77,16 +77,51 @@ def _scan_high(patched, tmp_path):
     assert exchanges and any(x["url"].endswith("/api/orders?id=1001") for x in exchanges)
     evidence = store.list_evidence(scan_id=result.context.scan_id)
     assert report["hypotheses"] and report["tests"] and evidence is not None
-    parser_observations = [test for test in report["tests"] if test.get("type") == "sql-injection-validation"]
+    sqli_tests = [
+        test for test in report["tests"]
+        if test.get("type") == "sql-injection-validation"
+    ]
+
+    assert sqli_tests
+
+    sqli_findings = [
+        f for f in findings
+        if "sql" in f.get("category", "").lower()
+    ]
+
     if not patched:
-        assert parser_observations and any(test.get("reproduction_status") == "REPRODUCED" and test.get("status") == "CANDIDATE" for test in parser_observations)
+        # The vulnerable high lab must now satisfy the evidence-first
+        # SQLi verification contract.
+        assert any(
+            test.get("reproduction_status") == "REPRODUCED"
+            and test.get("status") == "VERIFIED"
+            for test in sqli_tests
+        )
+        assert any(
+            f.get("status") == "VERIFIED"
+            for f in sqli_findings
+        )
     else:
-        assert parser_observations and not any(test.get("reproduction_status") == "REPRODUCED" for test in parser_observations)
-    assert not any(f.get("status") == "VERIFIED" and "sql" in f.get("category", "").lower() for f in findings)
-    sqli_coverage = next(row for row in report["vulnerability_matrix"] if row["class_id"] == "sqli")
-    assert sqli_coverage["can_confirm"] is False and sqli_coverage["verification_level"] == "OBSERVATION_ONLY"
+        assert not any(
+            test.get("reproduction_status") == "REPRODUCED"
+            and test.get("status") == "VERIFIED"
+            for test in sqli_tests
+        )
+        assert not any(
+            f.get("status") == "VERIFIED"
+            for f in sqli_findings
+        )
+
+    sqli_coverage = next(
+        row for row in report["vulnerability_matrix"]
+        if row["class_id"] == "sqli"
+    )
+
     if not patched:
-        assert sqli_coverage["status"] == "OBSERVATION_ONLY"
+        assert sqli_coverage["can_confirm"] is False
+        assert sqli_coverage["verification_level"] == "OBSERVATION_ONLY"
+    else:
+        assert sqli_coverage["can_confirm"] is False
     assert report["report_manifest"]
 
     json_doc = build_report_dict(result)

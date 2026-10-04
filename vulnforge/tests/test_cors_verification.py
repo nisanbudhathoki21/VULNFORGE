@@ -18,8 +18,8 @@ def _context(url, hypothesis_id="hyp-cors"):
     config=SimpleNamespace(profile_name="lab",active_requested=True)
     ctx=ScanContext("scan-cors",config,auth)
     ctx.requester=Requester(auth,get_profile("lab"),timeout=3)
-    card=build_test_methodology("cors-origin-reflection",url)
-    ctx.test_plan=[PlannedTest("test-cors",hypothesis_id,"cors-origin-reflection",url,
+    card=build_test_methodology("cors-unified",url)
+    ctx.test_plan=[PlannedTest("test-cors",hypothesis_id,"cors-unified",url,
         "GET",3,"LOW_READ_ONLY",True,"PLANNED",methodology=card)]
     ctx.hypotheses=[HypothesisRecord(hypothesis_id,"cors-policy-review","KEEP",endpoint=url,
         reason="Observed in-scope GET surface; no CORS behavior inferred in advance.")]
@@ -28,10 +28,10 @@ def _context(url, hypothesis_id="hyp-cors"):
 
 
 def test_cors_method_card_is_auditable_and_limits_claims():
-    card=build_test_methodology("cors-origin-reflection","http://127.0.0.1/x")
-    assert card["methodology_id"]=="VF-METHOD-CORS-1"
-    assert card["permitted_methods"]==["GET"]
-    assert card["request_cost"]==3
+    card=build_test_methodology("cors-unified","http://127.0.0.1/x")
+    assert card["methodology_id"]=="VF-METHOD-CORS"
+    assert card["permitted_methods"]==["GET", "OPTIONS"]
+    assert card["request_cost"]==8
     assert any("does not prove" in item for item in card["limitations"])
     assert "three distinct reserved .invalid origins" in card["rationale"]
 
@@ -49,9 +49,10 @@ def test_credentialed_origin_reflection_remains_candidate_without_browser_impact
     test=ctx.tests[0]
     assert test["status"]=="CANDIDATE"
     assert test["reproduction_status"]=="REPRODUCED"
-    assert len(test["observations"])==3
-    assert len({item["origin"] for item in test["observations"]})==3
+    assert len(test["observations"])==7
+    assert len({item["origin"] for item in test["observations"]})==7
     assert all(item["exchange_id"] for item in test["observations"])
+    assert len(test["preflight_observations"])==1
     assert test["impact_proven"] is False
     assert "browser credential behavior" in test["required_follow_up"]
     assert ctx.findings==[]
@@ -67,10 +68,10 @@ def test_medium_portfolio_runs_only_bounded_cors_and_redirect_checks_in_full_pip
         allow_private=True,authorization_confirmed=True,active_requested=True,
         test_profile="medium",test_profile_explicit=True)
     result=run_scan(config,auth)
-    cors_tests=[item for item in result.context.tests if item.get("type")=="cors-origin-reflection"]
+    cors_tests=[item for item in result.context.tests if item.get("type")=="cors-unified"]
     assert 1<=len(cors_tests)<=3
-    assert all(len(item["observations"])<=3 for item in cors_tests)
-    assert sum(len(item["observations"]) for item in cors_tests)<=9
+    assert all(len(item["observations"])==7 for item in cors_tests)
+    assert sum(len(item["observations"]) + len(item.get("preflight_observations", [])) for item in cors_tests)<=24
     assert any(item["status"]=="CANDIDATE" and item["reproduction_status"]=="REPRODUCED" for item in cors_tests)
     assert not any(finding.category=="cors / configuration" for finding in result.context.verified_findings)
     assert any(item["class_id"]=="cors" and item["supported"] for item in result.context.vulnerability_matrix)

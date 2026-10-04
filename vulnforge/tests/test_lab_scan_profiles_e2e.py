@@ -74,8 +74,8 @@ def test_medium_profile_verifies_only_reproduced_cors_and_redirect_and_control_i
     assert any("redirect" in category for category in vuln_types)
     assert not any("cors" in category for category in vuln_types)
     assert not any("cors" in category or "redirect" in category for category in patched_types)
-    vuln_cors = [test for test in vulnerable_report["tests"] if test.get("type") == "cors-origin-reflection"]
-    patch_cors = [test for test in patched_report["tests"] if test.get("type") == "cors-origin-reflection"]
+    vuln_cors = [test for test in vulnerable_report["tests"] if test.get("type") == "cors-unified"]
+    patch_cors = [test for test in patched_report["tests"] if test.get("type") == "cors-unified"]
     assert any(test["status"] == "CANDIDATE" and test["reproduction_status"] == "REPRODUCED" for test in vuln_cors)
     assert patch_cors and all(test["status"] == "CANDIDATE" for test in patch_cors)
     assert vulnerable_report["scan"]["test_profile"] == patched_report["scan"]["test_profile"] == "medium"
