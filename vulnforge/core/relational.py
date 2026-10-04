@@ -354,6 +354,598 @@ def ensure_relational_schema(con: sqlite3.Connection) -> None:
         if legacy_tests:
             link_test_records(con, scan_id, legacy_tests)
 
+    ensure_phase1_research_schema(con)
+
+def ensure_phase1_research_schema(con: sqlite3.Connection) -> None:
+    """
+    Advanced Phase-1 security research workspace.
+
+    The database deliberately separates:
+
+        observation
+            -> hypothesis
+            -> test plan
+            -> execution
+            -> evidence
+            -> verification
+            -> finding
+
+    External scanner output is stored as observation/provenance only.
+    Nothing in this schema automatically creates a vulnerability finding.
+    """
+
+    con.executescript(
+        """
+        ------------------------------------------------------------------
+        -- 1. SECURITY OBSERVATIONS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS observations (
+            observation_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            asset_id TEXT,
+            endpoint_id TEXT,
+            exchange_id TEXT,
+            actor_id TEXT,
+            kind TEXT NOT NULL,
+            source TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
+            value_json TEXT NOT NULL DEFAULT '{}',
+            severity_hint TEXT NOT NULL DEFAULT 'info',
+            confidence REAL NOT NULL DEFAULT 0.0,
+            scope_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+            observed_at REAL NOT NULL,
+            provenance_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_observations_scan
+            ON observations(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_observations_endpoint
+            ON observations(endpoint_id);
+
+        CREATE INDEX IF NOT EXISTS idx_observations_exchange
+            ON observations(exchange_id);
+
+        CREATE INDEX IF NOT EXISTS idx_observations_kind
+            ON observations(kind);
+
+
+        ------------------------------------------------------------------
+        -- 2. HYPOTHESES
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_hypotheses (
+            hypothesis_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            observation_id TEXT,
+            endpoint_id TEXT,
+            actor_id TEXT,
+            resource_id TEXT,
+            category TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            statement TEXT NOT NULL,
+            rationale TEXT NOT NULL DEFAULT '',
+            security_property TEXT NOT NULL DEFAULT '',
+            expected_boundary TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            priority TEXT NOT NULL DEFAULT 'NORMAL',
+            confidence REAL NOT NULL DEFAULT 0.0,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            provenance_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_hypotheses_scan
+            ON research_hypotheses(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_hypotheses_endpoint
+            ON research_hypotheses(endpoint_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_hypotheses_status
+            ON research_hypotheses(status);
+
+
+        ------------------------------------------------------------------
+        -- 3. TEST PLANS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_test_plans (
+            test_plan_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            hypothesis_id TEXT,
+            endpoint_id TEXT,
+            actor_id TEXT,
+            authentication_context_id TEXT,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT '',
+            method TEXT NOT NULL DEFAULT 'GET',
+            parameter TEXT NOT NULL DEFAULT '',
+            strategy_json TEXT NOT NULL DEFAULT '{}',
+            prerequisites_json TEXT NOT NULL DEFAULT '{}',
+            authorization_required INTEGER NOT NULL DEFAULT 1,
+            destructive INTEGER NOT NULL DEFAULT 0,
+            estimated_requests INTEGER NOT NULL DEFAULT 0,
+            risk TEXT NOT NULL DEFAULT 'LOW',
+            status TEXT NOT NULL DEFAULT 'PLANNED',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            provenance_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_test_plans_scan
+            ON research_test_plans(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_test_plans_hypothesis
+            ON research_test_plans(hypothesis_id);
+
+
+        ------------------------------------------------------------------
+        -- 4. INDIVIDUAL TEST STEPS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_test_steps (
+            step_id TEXT PRIMARY KEY,
+            test_plan_id TEXT NOT NULL,
+            scan_id TEXT NOT NULL,
+            sequence_no INTEGER NOT NULL,
+            stage TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PLANNED',
+            request_id TEXT,
+            response_id TEXT,
+            payload_id TEXT,
+            control_id TEXT,
+            diff_id TEXT,
+            assertion_json TEXT NOT NULL DEFAULT '{}',
+            result_json TEXT NOT NULL DEFAULT '{}',
+            started_at REAL,
+            finished_at REAL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_test_steps_plan
+            ON research_test_steps(test_plan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_test_steps_scan
+            ON research_test_steps(scan_id);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_research_test_steps_sequence
+            ON research_test_steps(test_plan_id, sequence_no);
+
+
+        ------------------------------------------------------------------
+        -- 5. REQUEST MUTATIONS / PAYLOAD APPLICATIONS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_mutations (
+            mutation_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_plan_id TEXT,
+            test_id TEXT,
+            parameter TEXT NOT NULL DEFAULT '',
+            location TEXT NOT NULL DEFAULT '',
+            original_value TEXT NOT NULL DEFAULT '',
+            mutated_value TEXT NOT NULL DEFAULT '',
+            mutation_type TEXT NOT NULL DEFAULT '',
+            rationale TEXT NOT NULL DEFAULT '',
+            payload_id TEXT,
+            request_id TEXT,
+            status TEXT NOT NULL DEFAULT 'PLANNED',
+            created_at REAL NOT NULL,
+            provenance_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_mutations_scan
+            ON research_mutations(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_mutations_test
+            ON research_mutations(test_id);
+
+
+        ------------------------------------------------------------------
+        -- 6. BASELINE SNAPSHOTS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_baselines (
+            baseline_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_id TEXT,
+            request_id TEXT,
+            response_id TEXT,
+            endpoint_id TEXT,
+            actor_id TEXT,
+            fingerprint TEXT NOT NULL DEFAULT '',
+            status_code INTEGER,
+            body_hash TEXT,
+            semantic_json TEXT NOT NULL DEFAULT '{}',
+            headers_json TEXT NOT NULL DEFAULT '{}',
+            timing_json TEXT NOT NULL DEFAULT '{}',
+            established_at REAL NOT NULL,
+            validity TEXT NOT NULL DEFAULT 'VALID',
+            invalid_reason TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_baselines_test
+            ON research_baselines(test_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_baselines_endpoint
+            ON research_baselines(endpoint_id);
+
+
+        ------------------------------------------------------------------
+        -- 7. EXPLICIT SECURITY CONTROLS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_controls (
+            research_control_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_id TEXT,
+            type TEXT NOT NULL,
+            purpose TEXT NOT NULL DEFAULT '',
+            request_id TEXT,
+            response_id TEXT,
+            expected_json TEXT NOT NULL DEFAULT '{}',
+            observed_json TEXT NOT NULL DEFAULT '{}',
+            passed INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'NOT_RUN',
+            rationale TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_controls_scan
+            ON research_controls(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_controls_test
+            ON research_controls(test_id);
+
+
+        ------------------------------------------------------------------
+        -- 8. SEMANTIC DIFFERENTIAL ANALYSIS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_differentials (
+            differential_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_id TEXT,
+            baseline_response_id TEXT,
+            control_response_id TEXT,
+            mutated_response_id TEXT,
+            comparison_type TEXT NOT NULL DEFAULT 'SEMANTIC',
+            status TEXT NOT NULL DEFAULT 'ANALYZED',
+            status_code_changed INTEGER NOT NULL DEFAULT 0,
+            headers_changed INTEGER NOT NULL DEFAULT 0,
+            body_changed INTEGER NOT NULL DEFAULT 0,
+            semantic_changed INTEGER NOT NULL DEFAULT 0,
+            authorization_boundary_changed INTEGER NOT NULL DEFAULT 0,
+            meaningful INTEGER NOT NULL DEFAULT 0,
+            summary TEXT NOT NULL DEFAULT '',
+            diff_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_differentials_scan
+            ON research_differentials(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_differentials_test
+            ON research_differentials(test_id);
+
+
+        ------------------------------------------------------------------
+        -- 9. REPRODUCTION ATTEMPTS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS reproductions (
+            reproduction_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_id TEXT,
+            attempt_no INTEGER NOT NULL DEFAULT 1,
+            request_id TEXT,
+            response_id TEXT,
+            expected_json TEXT NOT NULL DEFAULT '{}',
+            observed_json TEXT NOT NULL DEFAULT '{}',
+            matched INTEGER NOT NULL DEFAULT 0,
+            stability_score REAL NOT NULL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'NOT_RUN',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reproductions_scan
+            ON reproductions(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_reproductions_test
+            ON reproductions(test_id);
+
+
+        ------------------------------------------------------------------
+        -- 10. IMPACT VALIDATION CONTRACTS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS impact_validations (
+            impact_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            test_id TEXT,
+            contract_type TEXT NOT NULL DEFAULT '',
+            security_boundary TEXT NOT NULL DEFAULT '',
+            protected_resource TEXT NOT NULL DEFAULT '',
+            affected_actor TEXT NOT NULL DEFAULT '',
+            impact_class TEXT NOT NULL DEFAULT '',
+            evidence_json TEXT NOT NULL DEFAULT '{}',
+            proven INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'NOT_PROVEN',
+            rationale TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_impact_validations_scan
+            ON impact_validations(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_impact_validations_test
+            ON impact_validations(test_id);
+
+
+        ------------------------------------------------------------------
+        -- 11. EVIDENCE GRAPH
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS evidence_graph (
+            evidence_node_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            node_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_evidence_graph_scan
+            ON evidence_graph(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_evidence_graph_object
+            ON evidence_graph(object_id);
+
+
+        CREATE TABLE IF NOT EXISTS evidence_edges (
+            edge_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            source_node_id TEXT NOT NULL,
+            target_node_id TEXT NOT NULL,
+            relation TEXT NOT NULL,
+            rationale TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_evidence_edges_scan
+            ON evidence_edges(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_evidence_edges_source
+            ON evidence_edges(source_node_id);
+
+        CREATE INDEX IF NOT EXISTS idx_evidence_edges_target
+            ON evidence_edges(target_node_id);
+
+
+        ------------------------------------------------------------------
+        -- 12. RESEARCHER DECISIONS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_decisions (
+            decision_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            next_action TEXT NOT NULL DEFAULT '',
+            researcher TEXT NOT NULL DEFAULT 'local-user',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_decisions_scan
+            ON research_decisions(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_decisions_object
+            ON research_decisions(object_type, object_id);
+
+
+        ------------------------------------------------------------------
+        -- 13. ATTACK-PATH GRAPH
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS attack_path_nodes (
+            path_node_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            node_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            label TEXT NOT NULL DEFAULT '',
+            verified INTEGER NOT NULL DEFAULT 0,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_attack_path_nodes_scan
+            ON attack_path_nodes(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_attack_path_nodes_path
+            ON attack_path_nodes(path_id);
+
+
+        CREATE TABLE IF NOT EXISTS attack_path_edges (
+            path_edge_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            path_id TEXT NOT NULL,
+            source_node_id TEXT NOT NULL,
+            target_node_id TEXT NOT NULL,
+            relation TEXT NOT NULL,
+            verified INTEGER NOT NULL DEFAULT 0,
+            rationale TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_attack_path_edges_scan
+            ON attack_path_edges(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_attack_path_edges_path
+            ON attack_path_edges(path_id);
+
+
+        ------------------------------------------------------------------
+        -- 14. EXTERNAL TOOL OBSERVATIONS
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_tool_observations (
+            observation_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            tool_version TEXT NOT NULL DEFAULT '',
+            command_fingerprint TEXT NOT NULL DEFAULT '',
+            target TEXT NOT NULL DEFAULT '',
+            output_type TEXT NOT NULL DEFAULT '',
+            observation_json TEXT NOT NULL DEFAULT '{}',
+            raw_output_hash TEXT NOT NULL DEFAULT '',
+            scope_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_tool_observations_scan
+            ON research_tool_observations(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_tool_observations_tool
+            ON research_tool_observations(tool);
+
+
+        ------------------------------------------------------------------
+        -- 15. PROVENANCE
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_provenance (
+            provenance_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT 'local-user',
+            created_at REAL NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_provenance_scan
+            ON research_provenance(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_provenance_object
+            ON research_provenance(object_type, object_id);
+
+
+        ------------------------------------------------------------------
+        -- 16. RESEARCH NOTES
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_notes (
+            note_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            note_type TEXT NOT NULL DEFAULT 'NOTE',
+            content TEXT NOT NULL,
+            author TEXT NOT NULL DEFAULT 'local-user',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_notes_scan
+            ON research_notes(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_notes_object
+            ON research_notes(object_type, object_id);
+
+
+        ------------------------------------------------------------------
+        -- 17. RETEST / REMEDIATION VALIDATION
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS retest_runs (
+            retest_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            original_test_id TEXT,
+            original_finding_id TEXT,
+            endpoint_id TEXT,
+            request_id TEXT,
+            response_id TEXT,
+            previous_status TEXT NOT NULL DEFAULT '',
+            current_status TEXT NOT NULL DEFAULT '',
+            regression_detected INTEGER NOT NULL DEFAULT 0,
+            evidence_json TEXT NOT NULL DEFAULT '{}',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_retest_runs_scan
+            ON retest_runs(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_retest_runs_test
+            ON retest_runs(original_test_id);
+
+        CREATE INDEX IF NOT EXISTS idx_retest_runs_finding
+            ON retest_runs(original_finding_id);
+
+
+        ------------------------------------------------------------------
+        -- 18. REQUEST/RESPONSE TRACE INDEX
+        --
+        -- Gives the dashboard a single relationship layer for:
+        -- request -> response -> test -> evidence -> finding.
+        ------------------------------------------------------------------
+
+        CREATE TABLE IF NOT EXISTS research_trace_links (
+            trace_id TEXT PRIMARY KEY,
+            scan_id TEXT NOT NULL,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            request_id TEXT,
+            response_id TEXT,
+            exchange_id TEXT,
+            test_id TEXT,
+            hypothesis_id TEXT,
+            evidence_id TEXT,
+            finding_id TEXT,
+            relation TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            FOREIGN KEY(scan_id) REFERENCES scans(scan_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_research_trace_scan
+            ON research_trace_links(scan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_trace_test
+            ON research_trace_links(test_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_trace_exchange
+            ON research_trace_links(exchange_id);
+
+        CREATE INDEX IF NOT EXISTS idx_research_trace_finding
+            ON research_trace_links(finding_id);
+        """
+    )
+
 
 def migration_status(con: sqlite3.Connection) -> Dict[str, Any]:
     row = con.execute("SELECT migration_id, description, applied_at FROM schema_migrations WHERE migration_id=?", (MIGRATION_ID,)).fetchone()
@@ -451,76 +1043,2414 @@ def materialize_exchange(con: sqlite3.Connection, scan_id: str, doc: Dict[str, A
 
 
 def link_test_records(con: sqlite3.Connection, scan_id: str, tests: Iterable[Dict[str, Any]]) -> None:
-    """Materialize test, lifecycle, payload, control and exchange links."""
+    """
+    Materialize test records into both the legacy compatibility model and
+    the Phase-1 research workspace.
+
+    The legacy tables remain authoritative for backwards compatibility.
+    The research tables provide the normalized evidence/research graph:
+
+        observation
+          -> hypothesis
+          -> test plan
+          -> test steps
+          -> mutations
+          -> baseline/control
+          -> differential
+          -> reproduction
+          -> impact validation
+          -> decision
+          -> trace links
+
+    This function deliberately does NOT promote a test to a finding.
+    Verification remains the responsibility of the central verification gate.
+    """
     from ..engine.test_pipeline import build_pipeline, current_stage
+
+    now = time.time()
+
+    def _table_columns(table: str) -> set[str]:
+        rows = con.execute(f"PRAGMA table_info({table})").fetchall()
+        return {str(row[1]) for row in rows}
+
+    def _safe_json(value: Any) -> str:
+        return _json(value if value is not None else {})
+
+    def _upsert(table: str, values: Dict[str, Any], key: str) -> Optional[str]:
+        """
+        Insert/update a research row while tolerating schema evolution.
+
+        Only columns actually present in the current database are written.
+        This keeps the persistence layer compatible with older Phase-1 DBs.
+        """
+        columns = _table_columns(table)
+        if not columns:
+            return None
+
+        # Every Phase-1 research artifact must remain explicitly
+        # traceable to the originating test. Derived mapper records
+        # may omit test_id, so propagate the current test_id whenever
+        # the destination schema supports it.
+        values = dict(values)
+        if (
+            "test_id" in columns
+            and "test_id" not in values
+            and test_id
+        ):
+            values["test_id"] = test_id
+
+        data = {
+            k: v
+            for k, v in values.items()
+            if k in columns and v is not None
+        }
+
+        if key in columns and key not in data:
+            return None
+
+        # Fill NOT NULL columns that have no SQLite default.
+        info = con.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = set(data)
+
+        for row in info:
+            name = str(row[1])
+            notnull = bool(row[3])
+            default = row[4]
+            pk = bool(row[5])
+
+            if not notnull or name in existing or default is not None or pk:
+                continue
+
+            col_type = str(row[2] or "").upper()
+
+            if name.endswith("_at") or name in {
+                "created_at",
+                "updated_at",
+                "observed_at",
+                "established_at",
+                "started_at",
+                "finished_at",
+            }:
+                data[name] = now
+            elif "INT" in col_type:
+                data[name] = 0
+            elif any(token in col_type for token in ("REAL", "FLOAT", "DOUBLE")):
+                data[name] = 0.0
+            else:
+                data[name] = ""
+
+        if not data:
+            return None
+
+        names = list(data)
+        placeholders = ",".join("?" for _ in names)
+        columns_sql = ",".join(names)
+
+        # Prefer UPDATE+INSERT over INSERT OR REPLACE so that replacing a
+        # research node cannot unexpectedly cascade-delete linked records.
+        if key in data:
+            existing_row = con.execute(
+                f"SELECT 1 FROM {table} WHERE {key}=? LIMIT 1",
+                (data[key],),
+            ).fetchone()
+
+            if existing_row:
+                update_names = [n for n in names if n != key]
+                if update_names:
+                    assignments = ",".join(f"{n}=?" for n in update_names)
+                    con.execute(
+                        f"UPDATE {table} SET {assignments} WHERE {key}=?",
+                        tuple(data[n] for n in update_names) + (data[key],),
+                    )
+                return str(data[key])
+
+        con.execute(
+            f"INSERT INTO {table} ({columns_sql}) VALUES ({placeholders})",
+            tuple(data[n] for n in names),
+        )
+        return str(data[key]) if key in data else None
+
+    def _lookup_exchange(exchange_id: Any) -> tuple[Optional[str], Optional[str]]:
+        if not exchange_id:
+            return None, None
+
+        row = con.execute(
+            "SELECT request_id FROM requests WHERE exchange_id=?",
+            (str(exchange_id),),
+        ).fetchone()
+
+        if not row:
+            return None, None
+
+        request_id = str(row[0])
+        response = con.execute(
+            "SELECT response_id FROM responses WHERE request_id=?",
+            (request_id,),
+        ).fetchone()
+
+        return request_id, str(response[0]) if response else None
+
+    def _collect_exchange_ids(value: Any, output: list[str]) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                key_s = str(key)
+
+                if key_s.endswith("exchange_id") and child:
+                    output.append(str(child))
+
+                elif key_s == "exchange_ids" and isinstance(child, list):
+                    output.extend(str(x) for x in child if x)
+
+                elif isinstance(child, (dict, list)):
+                    _collect_exchange_ids(child, output)
+
+        elif isinstance(value, list):
+            for child in value:
+                _collect_exchange_ids(child, output)
+
+    def _as_list(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        return [value]
+
+    def _extract_text(value: Any, default: str = "") -> str:
+        if value is None:
+            return default
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, default=str)
+        return str(value)
+
     for index, test in enumerate(tests):
         if not isinstance(test, dict):
             continue
+
         test_id = str(test.get("test_id") or f"test-{index + 1}")
-        ids = {key: test.get(key) for key in ("baseline_exchange_id", "test_exchange_id", "cross_account_exchange_id", "repeat_exchange_id", "control_exchange_id", "negative_control_exchange_id")}
+        test_run_id = stable_id("testrun", f"{scan_id}:{test_id}")
+
+        # --------------------------------------------------------------
+        # Exchange resolution
+        # --------------------------------------------------------------
+
+        named_exchange_ids = {
+            key: test.get(key)
+            for key in (
+                "baseline_exchange_id",
+                "test_exchange_id",
+                "cross_account_exchange_id",
+                "repeat_exchange_id",
+                "control_exchange_id",
+                "negative_control_exchange_id",
+            )
+        }
+
         request_ids: Dict[str, Optional[str]] = {}
         response_ids: Dict[str, Optional[str]] = {}
-        for label, exchange_id in ids.items():
-            if exchange_id:
-                row = con.execute("SELECT request_id FROM requests WHERE exchange_id=?", (str(exchange_id),)).fetchone()
-                if row:
-                    request_ids[label] = row[0]
-                    response = con.execute("SELECT response_id FROM responses WHERE request_id=?", (row[0],)).fetchone()
-                    response_ids[label] = response[0] if response else None
-        # Some verifiers store exchanges inside an observations list rather
-        # than named baseline/control fields. Keep those exact links too.
-        nested_exchange_ids = []
-        def collect_exchange_ids(value):
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    if str(key).endswith("exchange_id") and child: nested_exchange_ids.append(str(child))
-                    elif str(key) == "exchange_ids" and isinstance(child, list): nested_exchange_ids.extend(str(x) for x in child if x)
-                    elif isinstance(child, (dict, list)): collect_exchange_ids(child)
-            elif isinstance(value, list):
-                for child in value: collect_exchange_ids(child)
-        collect_exchange_ids(test)
+
+        for label, exchange_id in named_exchange_ids.items():
+            req_id, resp_id = _lookup_exchange(exchange_id)
+
+            if req_id:
+                request_ids[label] = req_id
+                response_ids[label] = resp_id
+
+        nested_exchange_ids: list[str] = []
+        _collect_exchange_ids(test, nested_exchange_ids)
+
         for exchange_id in dict.fromkeys(nested_exchange_ids):
-            row = con.execute("SELECT request_id FROM requests WHERE exchange_id=?", (exchange_id,)).fetchone()
-            if row and row[0] not in request_ids.values():
-                request_ids.setdefault("observed_exchange_id", row[0])
-                response = con.execute("SELECT response_id FROM responses WHERE request_id=?", (row[0],)).fetchone()
-                response_ids.setdefault("observed_exchange_id", response[0] if response else None)
-        test_run_id = stable_id("testrun", f"{scan_id}:{test_id}")
+            req_id, resp_id = _lookup_exchange(exchange_id)
+
+            if req_id and req_id not in request_ids.values():
+                request_ids.setdefault("observed_exchange_id", req_id)
+                response_ids.setdefault("observed_exchange_id", resp_id)
+
+        # --------------------------------------------------------------
+        # Existing compatibility persistence
+        # --------------------------------------------------------------
+
         pipeline = build_pipeline(test)
+
+        scope_decision = str(
+            test.get("scope_decision")
+            or test.get("scope_status")
+            or (
+                "BLOCKED_BY_POLICY"
+                if str(test.get("status") or "").upper() in {"BLOCKED", "SKIPPED"}
+                else "ALLOWED_IN_SCOPE"
+            )
+        )
+
+        endpoint = str(test.get("endpoint") or "")
+        method = str(test.get("method") or "GET").upper()
+        parameter = str(test.get("parameter") or "")
+        auth_context_id = (
+            test.get("authentication_context_id")
+            or test.get("auth_context_id")
+        )
+
         con.execute(
-            """INSERT INTO test_runs(test_run_id,test_id,scan_id,baseline_request_id,baseline_response_id,test_request_id,test_response_id,control_request_id,control_response_id,status,result_json,pipeline_stage,pipeline_json,scope_decision,endpoint,method,parameter,hypothesis_id,authentication_context_id,confidence_rationale)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(test_run_id) DO UPDATE SET status=excluded.status,result_json=excluded.result_json,
-               baseline_request_id=excluded.baseline_request_id,baseline_response_id=excluded.baseline_response_id,test_request_id=excluded.test_request_id,test_response_id=excluded.test_response_id,
-               control_request_id=excluded.control_request_id,control_response_id=excluded.control_response_id,pipeline_stage=excluded.pipeline_stage,pipeline_json=excluded.pipeline_json,
-               scope_decision=excluded.scope_decision,endpoint=excluded.endpoint,method=excluded.method,parameter=excluded.parameter,hypothesis_id=excluded.hypothesis_id,authentication_context_id=excluded.authentication_context_id,confidence_rationale=excluded.confidence_rationale""",
-            (test_run_id, test_id, scan_id, request_ids.get("baseline_exchange_id"), response_ids.get("baseline_exchange_id"),
-             request_ids.get("test_exchange_id") or request_ids.get("cross_account_exchange_id") or request_ids.get("observed_exchange_id"), response_ids.get("test_exchange_id") or response_ids.get("cross_account_exchange_id") or response_ids.get("observed_exchange_id"),
-             request_ids.get("control_exchange_id") or request_ids.get("negative_control_exchange_id"), response_ids.get("control_exchange_id") or response_ids.get("negative_control_exchange_id"),
-             str(test.get("status") or "PLANNED"), _json(test), current_stage(test), _json(pipeline), str(test.get("scope_decision") or test.get("scope_status") or ("BLOCKED_BY_POLICY" if str(test.get("status") or "").upper() in {"BLOCKED", "SKIPPED"} else "ALLOWED_IN_SCOPE")),
-             str(test.get("endpoint") or ""), str(test.get("method") or "GET"), str(test.get("parameter") or ""), test.get("hypothesis_id"), test.get("authentication_context_id") or test.get("auth_context_id"),
-             str(test.get("confidence_rationale") or test.get("reason") or test.get("independent_verifier") or "")))
+            """INSERT INTO test_runs(
+                test_run_id,
+                test_id,
+                scan_id,
+                baseline_request_id,
+                baseline_response_id,
+                test_request_id,
+                test_response_id,
+                control_request_id,
+                control_response_id,
+                status,
+                result_json,
+                pipeline_stage,
+                pipeline_json,
+                scope_decision,
+                endpoint,
+                method,
+                parameter,
+                hypothesis_id,
+                authentication_context_id,
+                confidence_rationale
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(test_run_id) DO UPDATE SET
+                status=excluded.status,
+                result_json=excluded.result_json,
+                baseline_request_id=excluded.baseline_request_id,
+                baseline_response_id=excluded.baseline_response_id,
+                test_request_id=excluded.test_request_id,
+                test_response_id=excluded.test_response_id,
+                control_request_id=excluded.control_request_id,
+                control_response_id=excluded.control_response_id,
+                pipeline_stage=excluded.pipeline_stage,
+                pipeline_json=excluded.pipeline_json,
+                scope_decision=excluded.scope_decision,
+                endpoint=excluded.endpoint,
+                method=excluded.method,
+                parameter=excluded.parameter,
+                hypothesis_id=excluded.hypothesis_id,
+                authentication_context_id=excluded.authentication_context_id,
+                confidence_rationale=excluded.confidence_rationale""",
+            (
+                test_run_id,
+                test_id,
+                scan_id,
+                request_ids.get("baseline_exchange_id"),
+                response_ids.get("baseline_exchange_id"),
+                request_ids.get("test_exchange_id")
+                or request_ids.get("cross_account_exchange_id")
+                or request_ids.get("observed_exchange_id"),
+                response_ids.get("test_exchange_id")
+                or response_ids.get("cross_account_exchange_id")
+                or response_ids.get("observed_exchange_id"),
+                request_ids.get("control_exchange_id")
+                or request_ids.get("negative_control_exchange_id"),
+                response_ids.get("control_exchange_id")
+                or response_ids.get("negative_control_exchange_id"),
+                str(test.get("status") or "PLANNED"),
+                _json(test),
+                current_stage(test),
+                _json(pipeline),
+                scope_decision,
+                endpoint,
+                method,
+                parameter,
+                test.get("hypothesis_id"),
+                auth_context_id,
+                str(
+                    test.get("confidence_rationale")
+                    or test.get("reason")
+                    or test.get("independent_verifier")
+                    or ""
+                ),
+            ),
+        )
+
+        # --------------------------------------------------------------
+        # Payloads
+        # --------------------------------------------------------------
+
         payload_values = test.get("payloads") or test.get("payload")
-        if isinstance(payload_values, str): payload_values = [payload_values]
+        if isinstance(payload_values, str):
+            payload_values = [payload_values]
+
+        payload_ids: list[str] = []
+
         if isinstance(payload_values, list):
             for pindex, payload in enumerate(payload_values):
                 if isinstance(payload, (dict, list)):
-                    payload_text = json.dumps(payload, ensure_ascii=False, default=str)
-                    payload_type = str(payload.get("type") if isinstance(payload, dict) else "test-payload")
+                    payload_text = json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                    payload_type = str(
+                        payload.get("type")
+                        if isinstance(payload, dict)
+                        else "test-payload"
+                    )
                 else:
                     payload_text = str(payload)
-                    payload_type = str(test.get("type") or "test-payload")
-                payload_id = stable_id("payload", f"{scan_id}:{test_id}:{pindex}:{payload_text}")
-                con.execute("INSERT OR REPLACE INTO payloads(payload_id,test_id,endpoint_id, payload, payload_type,created_at) VALUES (?,?,?,?,?,?)", (payload_id, test_id, test.get("endpoint_id"), payload_text, payload_type, time.time()))
-        for key, value in test.items():
-            if "control" not in str(key).lower() or value in (None, "", [], {}):
-                continue
-            control_id = stable_id("control", f"{scan_id}:{test_id}:{key}")
-            con.execute("INSERT OR REPLACE INTO controls(control_id,test_run_id,scan_id,request_id,response_id,kind,status,data_json) VALUES (?,?,?,?,?,?,?,?)", (control_id, test_run_id, scan_id, request_ids.get("control_exchange_id"), response_ids.get("control_exchange_id"), str(key), str(test.get("status") or "OBSERVED"), _json(value)))
-        diff = test.get("differential") or test.get("diff")
-        if diff is not None:
-            diff_id = stable_id("diff", f"{scan_id}:{test_id}")
-            con.execute("INSERT OR REPLACE INTO diffs(diff_id,test_run_id,scan_id,baseline_response_id,test_response_id,control_response_id,status_difference,body_difference_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)", (diff_id, test_run_id, scan_id, response_ids.get("baseline_exchange_id"), response_ids.get("test_exchange_id") or response_ids.get("cross_account_exchange_id"), response_ids.get("control_exchange_id"), str((diff or {}).get("status") if isinstance(diff, dict) else ""), _json(diff), time.time()))
+                    payload_type = str(
+                        test.get("type") or "test-payload"
+                    )
 
+                payload_id = stable_id(
+                    "payload",
+                    f"{scan_id}:{test_id}:{pindex}:{payload_text}",
+                )
+                payload_ids.append(payload_id)
+
+                con.execute(
+                    """INSERT OR REPLACE INTO payloads(
+                        payload_id,
+                        test_id,
+                        endpoint_id,
+                        payload,
+                        payload_type,
+                        created_at
+                    )
+                    VALUES (?,?,?,?,?,?)""",
+                    (
+                        payload_id,
+                        test_id,
+                        test.get("endpoint_id"),
+                        payload_text,
+                        payload_type,
+                        now,
+                    ),
+                )
+
+        # --------------------------------------------------------------
+        # Existing legacy controls
+        # --------------------------------------------------------------
+
+        legacy_control_ids: list[str] = []
+
+        for key, value in test.items():
+            if (
+                "control" not in str(key).lower()
+                or value in (None, "", [], {})
+            ):
+                continue
+
+            control_id = stable_id(
+                "control",
+                f"{scan_id}:{test_id}:{key}",
+            )
+            legacy_control_ids.append(control_id)
+
+            con.execute(
+                """INSERT OR REPLACE INTO controls(
+                    control_id,
+                    test_run_id,
+                    scan_id,
+                    request_id,
+                    response_id,
+                    kind,
+                    status,
+                    data_json
+                )
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    control_id,
+                    test_run_id,
+                    scan_id,
+                    request_ids.get("control_exchange_id"),
+                    response_ids.get("control_exchange_id"),
+                    str(key),
+                    str(test.get("status") or "OBSERVED"),
+                    _json(value),
+                ),
+            )
+
+        # --------------------------------------------------------------
+        # Existing legacy differential
+        # --------------------------------------------------------------
+
+        diff = test.get("differential") or test.get("diff")
+        diff_id: Optional[str] = None
+
+        if diff is not None:
+            diff_id = stable_id(
+                "diff",
+                f"{scan_id}:{test_id}",
+            )
+
+            con.execute(
+                """INSERT OR REPLACE INTO diffs(
+                    diff_id,
+                    test_run_id,
+                    scan_id,
+                    baseline_response_id,
+                    test_response_id,
+                    control_response_id,
+                    status_difference,
+                    body_difference_json,
+                    created_at
+                )
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    diff_id,
+                    test_run_id,
+                    scan_id,
+                    response_ids.get("baseline_exchange_id"),
+                    response_ids.get("test_exchange_id")
+                    or response_ids.get("cross_account_exchange_id"),
+                    response_ids.get("control_exchange_id"),
+                    str(
+                        diff.get("status")
+                        if isinstance(diff, dict)
+                        else ""
+                    ),
+                    _json(diff),
+                    now,
+                ),
+            )
+
+        # ==============================================================
+        # PHASE-1 RESEARCH WORKSPACE
+        # ==============================================================
+
+        observation_ids: list[str] = []
+
+        observations = (
+            test.get("observations")
+            or test.get("observation")
+            or test.get("observed")
+        )
+
+        for oindex, observation in enumerate(_as_list(observations)):
+            observation_id = stable_id(
+                "observation",
+                f"{scan_id}:{test_id}:{oindex}:{_extract_text(observation)}",
+            )
+
+            observation_ids.append(observation_id)
+
+            if isinstance(observation, dict):
+                title = str(
+                    observation.get("title")
+                    or observation.get("name")
+                    or f"Observation {oindex + 1}"
+                )
+                description = str(
+                    observation.get("description")
+                    or observation.get("detail")
+                    or observation.get("reason")
+                    or ""
+                )
+                kind = str(
+                    observation.get("kind")
+                    or observation.get("type")
+                    or "behavioral"
+                )
+                source = str(
+                    observation.get("source")
+                    or observation.get("module")
+                    or "test"
+                )
+                value = observation
+                severity_hint = str(
+                    observation.get("severity")
+                    or observation.get("severity_hint")
+                    or "info"
+                )
+                confidence = observation.get("confidence")
+            else:
+                title = f"Observation {oindex + 1}"
+                description = str(observation)
+                kind = "behavioral"
+                source = "test"
+                value = observation
+                severity_hint = "info"
+                confidence = None
+
+            _upsert(
+                "observations",
+                {
+                    "observation_id": observation_id,
+                    "scan_id": scan_id,
+                    "asset_id": test.get("asset_id"),
+                    "endpoint_id": test.get("endpoint_id"),
+                    "exchange_id": (
+                        test.get("observation_exchange_id")
+                        or test.get("exchange_id")
+                        or named_exchange_ids.get("test_exchange_id")
+                        or named_exchange_ids.get("cross_account_exchange_id")
+                    ),
+                    "actor_id": test.get("actor_id"),
+                    "kind": kind,
+                    "source": source,
+                    "title": title,
+                    "description": description,
+                    "value_json": _safe_json(value),
+                    "severity_hint": severity_hint,
+                    "confidence": confidence,
+                    "scope_status": scope_decision,
+                    "observed_at": now,
+                    "provenance_json": _safe_json(
+                        {
+                            "test_id": test_id,
+                            "test_run_id": test_run_id,
+                            "source": source,
+                        }
+                    ),
+                },
+                "observation_id",
+            )
+
+        # If a verifier supplied exact exchange evidence but no explicit
+        # observation object, record the traffic as an observation rather
+        # than inventing a vulnerability.
+        if not observation_ids and (
+            request_ids.get("observed_exchange_id")
+            or request_ids.get("test_exchange_id")
+            or request_ids.get("cross_account_exchange_id")
+        ):
+            observation_id = stable_id(
+                "observation",
+                f"{scan_id}:{test_id}:traffic",
+            )
+            observation_ids.append(observation_id)
+
+            _upsert(
+                "observations",
+                {
+                    "observation_id": observation_id,
+                    "scan_id": scan_id,
+                    "asset_id": test.get("asset_id"),
+                    "endpoint_id": test.get("endpoint_id"),
+                    "exchange_id": (
+                        named_exchange_ids.get("test_exchange_id")
+                        or named_exchange_ids.get("cross_account_exchange_id")
+                        or named_exchange_ids.get("baseline_exchange_id")
+                    ),
+                    "actor_id": test.get("actor_id"),
+                    "kind": "traffic",
+                    "source": str(test.get("module") or "test"),
+                    "title": "Captured test traffic",
+                    "description": (
+                        "HTTP traffic associated with this test was "
+                        "captured and linked as research evidence."
+                    ),
+                    "value_json": _safe_json(
+                        {
+                            "test_id": test_id,
+                            "exchange_ids": [
+                                x for x in named_exchange_ids.values()
+                                if x
+                            ],
+                        }
+                    ),
+                    "severity_hint": "info",
+                    "scope_status": scope_decision,
+                    "observed_at": now,
+                    "provenance_json": _safe_json(
+                        {
+                            "test_id": test_id,
+                            "test_run_id": test_run_id,
+                            "generated": True,
+                        }
+                    ),
+                },
+                "observation_id",
+            )
+
+        # --------------------------------------------------------------
+        # Hypotheses
+        # --------------------------------------------------------------
+
+        hypothesis_values = (
+            test.get("hypotheses")
+            or test.get("hypothesis")
+            or test.get("hypothesis_record")
+        )
+
+        if not hypothesis_values and test.get("hypothesis_id"):
+            hypothesis_values = [{
+                "hypothesis_id": test.get("hypothesis_id"),
+                "title": test.get("title") or test.get("name") or "",
+                "statement": test.get("statement") or test.get("hypothesis") or "",
+                "rationale": test.get("rationale") or test.get("reason") or "",
+            }]
+
+        hypothesis_ids: list[str] = []
+
+        for hindex, hypothesis in enumerate(_as_list(hypothesis_values)):
+            if isinstance(hypothesis, dict):
+                hypothesis_id = str(
+                    hypothesis.get("hypothesis_id")
+                    or stable_id(
+                        "hypothesis",
+                        f"{scan_id}:{test_id}:{hindex}",
+                    )
+                )
+                category = str(
+                    hypothesis.get("category")
+                    or test.get("type")
+                    or ""
+                )
+                title = str(
+                    hypothesis.get("title")
+                    or test.get("title")
+                    or test.get("name")
+                    or "Security hypothesis"
+                )
+                statement = str(
+                    hypothesis.get("statement")
+                    or hypothesis.get("hypothesis")
+                    or ""
+                )
+                rationale = str(
+                    hypothesis.get("rationale")
+                    or hypothesis.get("reason")
+                    or ""
+                )
+                security_property = str(
+                    hypothesis.get("security_property")
+                    or test.get("security_property")
+                    or ""
+                )
+                expected_boundary = str(
+                    hypothesis.get("expected_boundary")
+                    or test.get("expected_boundary")
+                    or ""
+                )
+                status = str(
+                    hypothesis.get("status")
+                    or test.get("status")
+                    or "OPEN"
+                )
+                priority = str(
+                    hypothesis.get("priority")
+                    or test.get("priority")
+                    or "NORMAL"
+                )
+                confidence = hypothesis.get("confidence")
+                resource_id = hypothesis.get("resource_id") or test.get("resource_id")
+            else:
+                hypothesis_id = stable_id(
+                    "hypothesis",
+                    f"{scan_id}:{test_id}:{hindex}:{hypothesis}",
+                )
+                category = str(test.get("type") or "")
+                title = "Security hypothesis"
+                statement = str(hypothesis)
+                rationale = str(test.get("reason") or "")
+                security_property = str(test.get("security_property") or "")
+                expected_boundary = str(test.get("expected_boundary") or "")
+                status = str(test.get("status") or "OPEN")
+                priority = str(test.get("priority") or "NORMAL")
+                confidence = None
+                resource_id = test.get("resource_id")
+
+            hypothesis_ids.append(hypothesis_id)
+
+            _upsert(
+                "research_hypotheses",
+                {
+                    "hypothesis_id": hypothesis_id,
+                    "scan_id": scan_id,
+                    "observation_id": (
+                        observation_ids[0] if observation_ids else None
+                    ),
+                    "endpoint_id": test.get("endpoint_id"),
+                    "actor_id": test.get("actor_id"),
+                    "resource_id": resource_id,
+                    "category": category,
+                    "title": title,
+                    "statement": statement,
+                    "rationale": rationale,
+                    "security_property": security_property,
+                    "expected_boundary": expected_boundary,
+                    "status": status,
+                    "priority": priority,
+                    "confidence": confidence,
+                    "created_at": now,
+                    "updated_at": now,
+                    "provenance_json": _safe_json(
+                        {
+                            "test_id": test_id,
+                            "test_run_id": test_run_id,
+                        }
+                    ),
+                },
+                "hypothesis_id",
+            )
+
+        primary_hypothesis_id = (
+            hypothesis_ids[0]
+            if hypothesis_ids
+            else test.get("hypothesis_id")
+        )
+
+        # --------------------------------------------------------------
+        # Research test plan
+        # --------------------------------------------------------------
+
+        test_plan_id = stable_id(
+            "testplan",
+            f"{scan_id}:{test_id}",
+        )
+
+        _upsert(
+            "research_test_plans",
+            {
+                "test_plan_id": test_plan_id,
+                "scan_id": scan_id,
+                "hypothesis_id": primary_hypothesis_id,
+                "endpoint_id": test.get("endpoint_id"),
+                "actor_id": test.get("actor_id"),
+                "authentication_context_id": auth_context_id,
+                "name": str(
+                    test.get("name")
+                    or test.get("title")
+                    or f"Test {test_id}"
+                ),
+                "category": str(
+                    test.get("category")
+                    or test.get("type")
+                    or ""
+                ),
+                "method": method,
+                "parameter": parameter,
+                "strategy_json": _safe_json(
+                    test.get("strategy")
+                    or test.get("test_strategy")
+                    or {}
+                ),
+                "prerequisites_json": _safe_json(
+                    test.get("prerequisites")
+                    or {}
+                ),
+                "authorization_required": int(
+                    bool(test.get("authorization_required", True))
+                ),
+                "destructive": int(bool(test.get("destructive", False))),
+                "estimated_requests": int(
+                    test.get("estimated_requests") or 0
+                ),
+                "risk": str(test.get("risk") or "LOW"),
+                "status": str(test.get("status") or "PLANNED"),
+                "created_at": now,
+                "updated_at": now,
+                "provenance_json": _safe_json(
+                    {
+                        "test_id": test_id,
+                        "test_run_id": test_run_id,
+                    }
+                ),
+            },
+            "test_plan_id",
+        )
+
+        # --------------------------------------------------------------
+        # Research test steps
+        # --------------------------------------------------------------
+
+        explicit_steps = (
+            test.get("steps")
+            or test.get("test_steps")
+            or []
+        )
+
+        steps: list[Any] = (
+            explicit_steps
+            if isinstance(explicit_steps, list)
+            else [explicit_steps]
+        )
+
+        # If the verifier did not supply explicit steps, derive bounded
+        # research steps from the evidence that actually exists.
+        if not steps:
+            derived_steps: list[dict[str, Any]] = []
+
+            if request_ids.get("baseline_exchange_id"):
+                derived_steps.append({
+                    "stage": "BASELINE",
+                    "action": "baseline",
+                    "status": "COMPLETE",
+                    "request_id": request_ids.get("baseline_exchange_id"),
+                    "response_id": response_ids.get("baseline_exchange_id"),
+                })
+
+            if payload_ids:
+                derived_steps.append({
+                    "stage": "MUTATION",
+                    "action": "mutation",
+                    "status": "COMPLETE",
+                    "payload_id": payload_ids[0],
+                    "request_id": (
+                        request_ids.get("test_exchange_id")
+                        or request_ids.get("cross_account_exchange_id")
+                    ),
+                    "response_id": (
+                        response_ids.get("test_exchange_id")
+                        or response_ids.get("cross_account_exchange_id")
+                    ),
+                })
+
+            if request_ids.get("control_exchange_id"):
+                derived_steps.append({
+                    "stage": "CONTROL",
+                    "action": "control",
+                    "status": "COMPLETE",
+                    "request_id": request_ids.get("control_exchange_id"),
+                    "response_id": response_ids.get("control_exchange_id"),
+                })
+
+            if diff is not None:
+                derived_steps.append({
+                    "stage": "DIFFERENTIAL TEST",
+                    "action": "differential",
+                    "status": "COMPLETE",
+                    "diff_id": diff_id,
+                })
+
+            if test.get("reproduction_status") or test.get("reproduction"):
+                derived_steps.append({
+                    "stage": "REPRODUCTION",
+                    "action": "reproduction",
+                    "status": str(
+                        test.get("reproduction_status")
+                        or "COMPLETE"
+                    ),
+                })
+
+            steps = derived_steps
+
+        for sindex, step in enumerate(steps):
+            if isinstance(step, dict):
+                stage = str(
+                    step.get("stage")
+                    or step.get("pipeline_stage")
+                    or "OBSERVATION"
+                )
+                action = str(
+                    step.get("action")
+                    or step.get("name")
+                    or stage.lower()
+                )
+                step_status = str(
+                    step.get("status")
+                    or "PLANNED"
+                )
+
+                step_request_id = (
+                    step.get("request_id")
+                    or (
+                        _lookup_exchange(step.get("exchange_id"))[0]
+                        if step.get("exchange_id")
+                        else None
+                    )
+                )
+                step_response_id = (
+                    step.get("response_id")
+                    or (
+                        _lookup_exchange(step.get("exchange_id"))[1]
+                        if step.get("exchange_id")
+                        else None
+                    )
+                )
+                step_payload_id = step.get("payload_id")
+                step_control_id = step.get("control_id")
+                step_diff_id = step.get("diff_id")
+
+                assertion = step.get("assertion") or {}
+                result = step.get("result") or step
+            else:
+                stage = "OBSERVATION"
+                action = str(step)
+                step_status = "OBSERVED"
+                step_request_id = None
+                step_response_id = None
+                step_payload_id = None
+                step_control_id = None
+                step_diff_id = None
+                assertion = {}
+                result = {"value": step}
+
+            step_id = stable_id(
+                "teststep",
+                f"{scan_id}:{test_plan_id}:{sindex}",
+            )
+
+            _upsert(
+                "research_test_steps",
+                {
+                    "step_id": step_id,
+                    "test_plan_id": test_plan_id,
+                    "scan_id": scan_id,
+                    "sequence_no": sindex + 1,
+                    "stage": stage,
+                    "action": action,
+                    "status": step_status,
+                    "request_id": step_request_id,
+                    "response_id": step_response_id,
+                    "payload_id": step_payload_id,
+                    "control_id": step_control_id,
+                    "diff_id": step_diff_id,
+                    "assertion_json": _safe_json(assertion),
+                    "result_json": _safe_json(result),
+                    "started_at": step.get("started_at") if isinstance(step, dict) else None,
+                    "finished_at": step.get("finished_at") if isinstance(step, dict) else None,
+                },
+                "step_id",
+            )
+
+        # --------------------------------------------------------------
+        # Mutations
+        # --------------------------------------------------------------
+
+        mutations = (
+            test.get("mutations")
+            or test.get("mutation")
+            or []
+        )
+
+        for mindex, mutation in enumerate(_as_list(mutations)):
+            if isinstance(mutation, dict):
+                original = mutation.get("original_value")
+                mutated = mutation.get("mutated_value")
+                location = str(mutation.get("location") or parameter)
+                mutation_type = str(
+                    mutation.get("mutation_type")
+                    or mutation.get("type")
+                    or "value"
+                )
+                rationale = str(mutation.get("rationale") or "")
+                mutation_status = str(
+                    mutation.get("status") or "EXECUTED"
+                )
+                mutation_payload_id = (
+                    mutation.get("payload_id")
+                    or (payload_ids[mindex] if mindex < len(payload_ids) else None)
+                )
+                mutation_request_id = mutation.get("request_id")
+            else:
+                original = None
+                mutated = mutation
+                location = parameter
+                mutation_type = "value"
+                rationale = ""
+                mutation_status = "EXECUTED"
+                mutation_payload_id = (
+                    payload_ids[mindex]
+                    if mindex < len(payload_ids)
+                    else None
+                )
+                mutation_request_id = None
+
+            mutation_id = stable_id(
+                "mutation",
+                f"{scan_id}:{test_id}:{mindex}",
+            )
+
+            _upsert(
+                "research_mutations",
+                {
+                    "mutation_id": mutation_id,
+                    "scan_id": scan_id,
+                    "test_plan_id": test_plan_id,
+                    "test_run_id": test_run_id,
+                    "parameter": parameter,
+                    "location": location,
+                    "original_value": _extract_text(original),
+                    "mutated_value": _extract_text(mutated),
+                    "mutation_type": mutation_type,
+                    "rationale": rationale,
+                    "payload_id": mutation_payload_id,
+                    "request_id": (
+                        mutation_request_id
+                        or request_ids.get("test_exchange_id")
+                        or request_ids.get("cross_account_exchange_id")
+                    ),
+                    "status": mutation_status,
+                    "created_at": now,
+                    "provenance_json": _safe_json(
+                        {"test_id": test_id}
+                    ),
+                },
+                "mutation_id",
+            )
+
+        # --------------------------------------------------------------
+        # Baseline
+        # --------------------------------------------------------------
+
+        baseline_exchange = named_exchange_ids.get(
+            "baseline_exchange_id"
+        )
+
+        if baseline_exchange or response_ids.get("baseline_exchange_id"):
+            baseline_id = stable_id(
+                "baseline",
+                f"{scan_id}:{test_id}",
+            )
+
+            baseline_data = test.get("baseline")
+            if not isinstance(baseline_data, dict):
+                baseline_data = {}
+
+            _upsert(
+                "research_baselines",
+                {
+                    "baseline_id": baseline_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "request_id": request_ids.get("baseline_exchange_id"),
+                    "response_id": response_ids.get("baseline_exchange_id"),
+                    "endpoint_id": test.get("endpoint_id"),
+                    "actor_id": test.get("actor_id"),
+                    "fingerprint": str(
+                        baseline_data.get("fingerprint")
+                        or test.get("baseline_fingerprint")
+                        or ""
+                    ),
+                    "status_code": baseline_data.get("status_code"),
+                    "body_hash": str(
+                        baseline_data.get("body_hash") or ""
+                    ),
+                    "semantic_json": _safe_json(
+                        baseline_data.get("semantic")
+                        or baseline_data.get("semantic_diff")
+                        or {}
+                    ),
+                    "headers_json": _safe_json(
+                        baseline_data.get("headers")
+                        or {}
+                    ),
+                    "timing_json": _safe_json(
+                        baseline_data.get("timing")
+                        or {}
+                    ),
+                    "validity": str(
+                        baseline_data.get("validity")
+                        or baseline_data.get("status")
+                        or test.get("baseline_status")
+                        or "VALID"
+                    ),
+                    "established_at": now,
+                    "invalid_reason": str(
+                        baseline_data.get("invalid_reason")
+                        or baseline_data.get("validity_reason")
+                        or ""
+                    ),
+                },
+                "baseline_id",
+            )
+
+        # --------------------------------------------------------------
+        # Research controls
+        # --------------------------------------------------------------
+
+        research_controls = (
+            test.get("controls")
+            or test.get("control")
+            or []
+        )
+
+        for cindex, control in enumerate(_as_list(research_controls)):
+            if isinstance(control, dict):
+                control_type = str(
+                    control.get("type")
+                    or control.get("kind")
+                    or "control"
+                )
+                purpose = str(
+                    control.get("purpose")
+                    or control.get("description")
+                    or ""
+                )
+                expected = control.get("expected") or {}
+                observed = control.get("observed") or {}
+                passed = control.get("passed")
+                control_status = str(
+                    control.get("status") or "OBSERVED"
+                )
+                control_request_id = control.get("request_id")
+                control_response_id = control.get("response_id")
+            else:
+                control_type = "control"
+                purpose = str(control)
+                expected = {}
+                observed = {}
+                passed = None
+                control_status = "OBSERVED"
+                control_request_id = request_ids.get("control_exchange_id")
+                control_response_id = response_ids.get("control_exchange_id")
+
+            research_control_id = stable_id(
+                "research-control",
+                f"{scan_id}:{test_id}:{cindex}:{control_type}",
+            )
+
+            _upsert(
+                "research_controls",
+                {
+                    "research_control_id": research_control_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "type": control_type,
+                    "purpose": purpose,
+                    "request_id": (
+                        control_request_id
+                        or request_ids.get("control_exchange_id")
+                    ),
+                    "response_id": (
+                        control_response_id
+                        or response_ids.get("control_exchange_id")
+                    ),
+                    "expected_json": _safe_json(expected),
+                    "observed_json": _safe_json(observed),
+                    "passed": passed,
+                    "status": control_status,
+                    "rationale": str(
+                        control.get("rationale") or ""
+                        if isinstance(control, dict)
+                        else ""
+                    ),
+                    "created_at": now,
+                },
+                "research_control_id",
+            )
+
+        # Preserve a named control even when it was only supplied through
+        # the legacy exchange fields.
+        if (
+            not research_controls
+            and request_ids.get("control_exchange_id")
+        ):
+            research_control_id = stable_id(
+                "research-control",
+                f"{scan_id}:{test_id}:exchange",
+            )
+
+            _upsert(
+                "research_controls",
+                {
+                    "research_control_id": research_control_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "type": "exchange_control",
+                    "purpose": "Control exchange linked to test",
+                    "request_id": request_ids.get("control_exchange_id"),
+                    "response_id": response_ids.get("control_exchange_id"),
+                    "expected_json": _safe_json({}),
+                    "observed_json": _safe_json({}),
+                    "status": "OBSERVED",
+                    "created_at": now,
+                },
+                "research_control_id",
+            )
+
+        # --------------------------------------------------------------
+        # Differential
+        # --------------------------------------------------------------
+
+        if diff is not None:
+            differential_id = stable_id(
+                "differential",
+                f"{scan_id}:{test_id}",
+            )
+
+            if isinstance(diff, dict):
+                status_difference = diff.get("status")
+                header_difference = (
+                    diff.get("headers")
+                    or diff.get("header_difference")
+                    or {}
+                )
+                body_difference = (
+                    diff.get("body")
+                    or diff.get("body_difference")
+                    or {}
+                )
+                semantic_difference = (
+                    diff.get("semantic")
+                    or diff.get("semantic_difference")
+                    or {}
+                )
+                auth_boundary_change = (
+                    diff.get("authorization")
+                    or diff.get("auth_boundary")
+                    or {}
+                )
+                meaningful = diff.get("meaningful")
+            else:
+                status_difference = None
+                header_difference = {}
+                body_difference = diff
+                semantic_difference = {}
+                auth_boundary_change = {}
+                meaningful = None
+
+            _upsert(
+                "research_differentials",
+                {
+                    "differential_id": differential_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "baseline_response_id": response_ids.get(
+                        "baseline_exchange_id"
+                    ),
+                    "control_response_id": response_ids.get(
+                        "control_exchange_id"
+                    ),
+                    "mutated_response_id": (
+                        response_ids.get("test_exchange_id")
+                        or response_ids.get("cross_account_exchange_id")
+                    ),
+                    "comparison_type": str(
+                        test.get("comparison_type")
+                        or "baseline_control_mutation"
+                    ),
+                    "status": "ANALYZED",
+                    "status_code_changed": int(
+                        bool(status_difference)
+                    ),
+                    "headers_changed": int(
+                        bool(header_difference)
+                    ),
+                    "body_changed": int(
+                        bool(body_difference)
+                    ),
+                    "semantic_changed": int(
+                        bool(semantic_difference)
+                    ),
+                    "authorization_boundary_changed": int(
+                        bool(auth_boundary_change)
+                    ),
+                    "meaningful": (
+                        int(bool(meaningful))
+                        if meaningful is not None
+                        else 0
+                    ),
+                    "summary": str(
+                        diff.get("summary")
+                        if isinstance(diff, dict)
+                        else ""
+                    ),
+                    "diff_json": _safe_json({
+                        "legacy_status_difference": status_difference,
+                        "legacy_header_difference": header_difference,
+                        "legacy_body_difference": body_difference,
+                        "legacy_semantic_difference": semantic_difference,
+                        "legacy_authorization_boundary": (
+                            auth_boundary_change
+                        ),
+                        "meaningful": meaningful,
+                        "original": diff,
+                    }),
+                    "created_at": now,
+                },
+                "differential_id",
+            )
+        else:
+            differential_id = None
+
+        # --------------------------------------------------------------
+        # Reproduction
+        # --------------------------------------------------------------
+
+        reproduction_values = (
+            test.get("reproductions")
+            or test.get("reproduction")
+        )
+
+        if reproduction_values:
+            for rindex, reproduction in enumerate(
+                _as_list(reproduction_values)
+            ):
+                if isinstance(reproduction, dict):
+                    attempt_no = int(
+                        reproduction.get("attempt_no")
+                        or rindex + 1
+                    )
+                    reproduction_request_id = reproduction.get(
+                        "request_id"
+                    )
+                    reproduction_response_id = reproduction.get(
+                        "response_id"
+                    )
+                    expected = reproduction.get("expected") or {}
+                    observed = reproduction.get("observed") or {}
+                    matched = reproduction.get("matched")
+                    stability_score = reproduction.get(
+                        "stability_score"
+                    )
+                    reproduction_status = str(
+                        reproduction.get("status")
+                        or ("MATCHED" if matched else "OBSERVED")
+                    )
+                else:
+                    attempt_no = rindex + 1
+                    reproduction_request_id = None
+                    reproduction_response_id = None
+                    expected = {}
+                    observed = reproduction
+                    matched = None
+                    stability_score = None
+                    reproduction_status = "OBSERVED"
+
+                reproduction_id = stable_id(
+                    "reproduction",
+                    f"{scan_id}:{test_id}:{attempt_no}",
+                )
+
+                _upsert(
+                    "reproductions",
+                    {
+                        "reproduction_id": reproduction_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "attempt_no": attempt_no,
+                        "request_id": (
+                            reproduction_request_id
+                            or request_ids.get("repeat_exchange_id")
+                        ),
+                        "response_id": (
+                            reproduction_response_id
+                            or response_ids.get("repeat_exchange_id")
+                        ),
+                        "expected_json": _safe_json(expected),
+                        "observed_json": _safe_json(observed),
+                        "matched": matched,
+                        "stability_score": stability_score,
+                        "status": reproduction_status,
+                        "created_at": now,
+                    },
+                    "reproduction_id",
+                )
+
+        # --------------------------------------------------------------
+        # Impact validation
+        # --------------------------------------------------------------
+
+        impact_values = (
+            test.get("impact_validations")
+            or test.get("impact_validation")
+            or test.get("impact")
+        )
+
+        if impact_values:
+            for iindex, impact in enumerate(_as_list(impact_values)):
+                if isinstance(impact, dict):
+                    contract_type = str(
+                        impact.get("contract_type")
+                        or impact.get("type")
+                        or "security_boundary"
+                    )
+                    security_boundary = str(
+                        impact.get("security_boundary")
+                        or ""
+                    )
+                    protected_resource = str(
+                        impact.get("protected_resource")
+                        or ""
+                    )
+                    affected_actor = str(
+                        impact.get("affected_actor")
+                        or ""
+                    )
+                    impact_class = str(
+                        impact.get("impact_class")
+                        or impact.get("class")
+                        or ""
+                    )
+                    evidence = impact.get("evidence") or {}
+                    proven = impact.get("proven")
+                    impact_status = str(
+                        impact.get("status") or "OBSERVED"
+                    )
+                    rationale = str(
+                        impact.get("rationale") or ""
+                    )
+                else:
+                    contract_type = "security_boundary"
+                    security_boundary = ""
+                    protected_resource = ""
+                    affected_actor = ""
+                    impact_class = ""
+                    evidence = impact
+                    proven = None
+                    impact_status = "OBSERVED"
+                    rationale = ""
+
+                impact_id = stable_id(
+                    "impact",
+                    f"{scan_id}:{test_id}:{iindex}",
+                )
+
+                _upsert(
+                    "impact_validations",
+                    {
+                        "impact_id": impact_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "contract_type": contract_type,
+                        "security_boundary": security_boundary,
+                        "protected_resource": protected_resource,
+                        "affected_actor": affected_actor,
+                        "impact_class": impact_class,
+                        "evidence_json": _safe_json(evidence),
+                        "proven": proven,
+                        "status": impact_status,
+                        "rationale": rationale,
+                        "created_at": now,
+                    },
+                    "impact_id",
+                )
+
+        # --------------------------------------------------------------
+        # Derived research evidence
+        #
+        # Converts verifier-produced evidence into structured research
+        # records. This section NEVER creates or promotes findings.
+        # --------------------------------------------------------------
+
+        test_type = str(
+            test.get("type")
+            or test.get("category")
+            or ""
+        ).strip().lower()
+
+        def _as_bool(value):
+            if isinstance(value, bool):
+                return value
+            if value is None:
+                return None
+            return str(value).strip().lower() in {
+                "1", "true", "yes", "verified", "passed", "match"
+            }
+
+        def _trace(
+            object_type,
+            object_id,
+            *,
+            relation="supports",
+            request_id=None,
+            response_id=None,
+            exchange_id=None,
+            evidence_id=None,
+            finding_id=None,
+        ):
+            if not object_id:
+                return
+
+            trace_id = stable_id(
+                "research-trace",
+                f"{scan_id}:{test_id}:{object_type}:{object_id}:{relation}",
+            )
+
+            _upsert(
+                "research_trace_links",
+                {
+                    "trace_id": trace_id,
+                    "scan_id": scan_id,
+                    "object_type": object_type,
+                    "object_id": str(object_id),
+                    "request_id": request_id,
+                    "response_id": response_id,
+                    "exchange_id": exchange_id,
+                    "test_id": test_id,
+                    "hypothesis_id": primary_hypothesis_id,
+                    "evidence_id": evidence_id,
+                    "finding_id": finding_id,
+                    "relation": relation,
+                    "created_at": now,
+                },
+                "trace_id",
+            )
+
+        def _evidence_node(node_type, object_id, label, metadata=None):
+            if not object_id:
+                return None
+
+            node_id = stable_id(
+                "evidence-node",
+                f"{scan_id}:{node_type}:{object_id}",
+            )
+
+            _upsert(
+                "evidence_graph",
+                {
+                    "evidence_node_id": node_id,
+                    "scan_id": scan_id,
+                    "node_type": node_type,
+                    "object_id": str(object_id),
+                    "label": label,
+                    "metadata_json": _safe_json(metadata or {}),
+                    "created_at": now,
+                },
+                "evidence_node_id",
+            )
+
+            return node_id
+
+        def _evidence_edge(source_id, target_id, relation, rationale=""):
+            if not source_id or not target_id:
+                return
+
+            edge_id = stable_id(
+                "evidence-edge",
+                f"{scan_id}:{source_id}:{target_id}:{relation}",
+            )
+
+            _upsert(
+                "evidence_edges",
+                {
+                    "edge_id": edge_id,
+                    "scan_id": scan_id,
+                    "source_node_id": source_id,
+                    "target_node_id": target_id,
+                    "relation": relation,
+                    "rationale": rationale,
+                    "created_at": now,
+                },
+                "edge_id",
+            )
+
+        is_bola = (
+            "cross-account-object-authorization" in test_type
+            or "bola" in test_type
+            or "object-level authorization" in str(
+                test.get("security_boundary") or ""
+            ).lower()
+        )
+
+        if is_bola:
+            baseline_exchange_id = named_exchange_ids.get(
+                "baseline_exchange_id"
+            )
+            cross_exchange_id = named_exchange_ids.get(
+                "cross_account_exchange_id"
+            )
+            repeat_exchange_id = named_exchange_ids.get(
+                "repeat_exchange_id"
+            )
+
+            baseline_request_id = request_ids.get(
+                "baseline_exchange_id"
+            )
+            baseline_response_id = response_ids.get(
+                "baseline_exchange_id"
+            )
+
+            cross_request_id = request_ids.get(
+                "cross_account_exchange_id"
+            )
+            cross_response_id = response_ids.get(
+                "cross_account_exchange_id"
+            )
+
+            repeat_request_id = request_ids.get(
+                "repeat_exchange_id"
+            )
+            repeat_response_id = response_ids.get(
+                "repeat_exchange_id"
+            )
+
+            owner_verified = _as_bool(
+                test.get("owner_identity_verified")
+            )
+            other_verified = _as_bool(
+                test.get("other_identity_verified")
+            )
+
+            baseline_owner_matches = _as_bool(
+                test.get("baseline_owner_matches")
+            )
+            cross_owner_matches = _as_bool(
+                test.get("cross_owner_matches")
+            )
+
+            repeat_stable = _as_bool(
+                test.get("repeat_response_stable")
+            )
+
+            sensitive_fields = test.get(
+                "sensitive_fields"
+            ) or []
+
+            # ----------------------------------------------------------
+            # Authorization mutation
+            # ----------------------------------------------------------
+
+            if cross_exchange_id:
+                mutation_id = stable_id(
+                    "mutation",
+                    f"{scan_id}:{test_id}:authorization-context",
+                )
+
+                _upsert(
+                    "research_mutations",
+                    {
+                        "mutation_id": mutation_id,
+                        "scan_id": scan_id,
+                        "test_plan_id": test_plan_id,
+                        "test_run_id": test_run_id,
+                        "parameter": str(
+                            test.get(
+                                "identity_assertion_header"
+                            )
+                            or parameter
+                            or "identity"
+                        ),
+                        "location": "authorization context",
+                        "original_value": str(
+                            test.get("owner_identity_label")
+                            or "owner"
+                        ),
+                        "mutated_value": str(
+                            test.get("other_identity_label")
+                            or "other actor"
+                        ),
+                        "mutation_type": "authorization-context",
+                        "rationale": (
+                            "Compare the protected resource under "
+                            "different authorized identities."
+                        ),
+                        "payload_id": None,
+                        "request_id": cross_request_id,
+                        "status": "EXECUTED",
+                        "created_at": now,
+                        "provenance_json": _safe_json({
+                            "derived_from_verifier": True,
+                            "exchange_id": cross_exchange_id,
+                        }),
+                    },
+                    "mutation_id",
+                )
+
+                _trace(
+                    "mutation",
+                    mutation_id,
+                    relation="executes",
+                    request_id=cross_request_id,
+                    response_id=cross_response_id,
+                    exchange_id=cross_exchange_id,
+                )
+
+            # ----------------------------------------------------------
+            # Identity control
+            # ----------------------------------------------------------
+
+            if (
+                owner_verified is not None
+                or other_verified is not None
+                or baseline_owner_matches is not None
+                or cross_owner_matches is not None
+            ):
+                control_id = stable_id(
+                    "research-control",
+                    f"{scan_id}:{test_id}:identity-boundary",
+                )
+
+                control_passed = (
+                    owner_verified is True
+                    and other_verified is True
+                    and baseline_owner_matches is True
+                )
+
+                _upsert(
+                    "research_controls",
+                    {
+                        "research_control_id": control_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "type": "identity_boundary",
+                        "purpose": (
+                            "Verify that the owner and other actor "
+                            "identities are distinct and attributable."
+                        ),
+                        "request_id": baseline_request_id,
+                        "response_id": baseline_response_id,
+                        "expected_json": _safe_json({
+                            "owner_identity_verified": True,
+                            "other_identity_verified": True,
+                            "baseline_owner_matches": True,
+                        }),
+                        "observed_json": _safe_json({
+                            "owner_identity_verified": owner_verified,
+                            "other_identity_verified": other_verified,
+                            "baseline_owner_matches": baseline_owner_matches,
+                            "cross_owner_matches": cross_owner_matches,
+                        }),
+                        "passed": control_passed,
+                        "status": (
+                            "PASSED"
+                            if control_passed
+                            else "OBSERVED"
+                        ),
+                        "rationale": (
+                            "Derived exclusively from verifier-supplied "
+                            "identity assertions."
+                        ),
+                        "created_at": now,
+                    },
+                    "research_control_id",
+                )
+
+                _trace(
+                    "control",
+                    control_id,
+                    relation="validates",
+                    request_id=baseline_request_id,
+                    response_id=baseline_response_id,
+                    exchange_id=baseline_exchange_id,
+                )
+
+            # ----------------------------------------------------------
+            # Authorization differential
+            # ----------------------------------------------------------
+
+            differential_id = None
+
+            if baseline_response_id and cross_response_id:
+                differential_id = stable_id(
+                    "differential",
+                    f"{scan_id}:{test_id}:authorization-boundary",
+                )
+
+                _upsert(
+                    "research_differentials",
+                    {
+                        "differential_id": differential_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "baseline_response_id": baseline_response_id,
+                        "control_response_id": response_ids.get(
+                            "control_exchange_id"
+                        ),
+                        "mutated_response_id": cross_response_id,
+                        "comparison_type": "authorization-boundary",
+                        "status": "ANALYZED",
+                        "status_code_changed": int(
+                            test.get("baseline_status")
+                            != test.get("cross_account_status")
+                        ),
+                        "headers_changed": 0,
+                        "body_changed": int(
+                            bool(
+                                test.get("baseline_response_sha256")
+                                and test.get(
+                                    "cross_account_response_sha256"
+                                )
+                                and (
+                                    test.get(
+                                        "baseline_response_sha256"
+                                    )
+                                    != test.get(
+                                        "cross_account_response_sha256"
+                                    )
+                                )
+                            )
+                        ),
+                        "semantic_changed": int(
+                            (
+                                baseline_owner_matches is not None
+                                and cross_owner_matches is not None
+                                and baseline_owner_matches
+                                != cross_owner_matches
+                            )
+                            or (
+                                _as_bool(
+                                    test.get(
+                                        "baseline_sensitive_fields_present"
+                                    )
+                                )
+                                != _as_bool(
+                                    test.get(
+                                        "cross_sensitive_fields_present"
+                                    )
+                                )
+                            )
+                        ),
+                        "authorization_boundary_changed": int(
+                            cross_owner_matches is True
+                        ),
+                        "meaningful": 1,
+                        "summary": (
+                            "Compared the owner baseline with the "
+                            "cross-account authorization response using "
+                            "verifier-supplied identity and response evidence."
+                        ),
+                        "diff_json": _safe_json({
+                            "baseline_exchange_id": baseline_exchange_id,
+                            "cross_account_exchange_id": cross_exchange_id,
+                            "baseline_status": test.get(
+                                "baseline_status"
+                            ),
+                            "cross_account_status": test.get(
+                                "cross_account_status"
+                            ),
+                            "baseline_response_sha256": test.get(
+                                "baseline_response_sha256"
+                            ),
+                            "cross_account_response_sha256": test.get(
+                                "cross_account_response_sha256"
+                            ),
+                            "baseline_owner_matches": (
+                                baseline_owner_matches
+                            ),
+                            "cross_owner_matches": (
+                                cross_owner_matches
+                            ),
+                            "baseline_sensitive_fields_present": (
+                                _as_bool(
+                                    test.get(
+                                        "baseline_sensitive_fields_present"
+                                    )
+                                )
+                            ),
+                            "cross_sensitive_fields_present": (
+                                _as_bool(
+                                    test.get(
+                                        "cross_sensitive_fields_present"
+                                    )
+                                )
+                            ),
+                            "sensitive_fields": sensitive_fields,
+                            "identity_assertion_header": test.get(
+                                "identity_assertion_header"
+                            ),
+                            "owner_identity_label": test.get(
+                                "owner_identity_label"
+                            ),
+                            "other_identity_label": test.get(
+                                "other_identity_label"
+                            ),
+                        }),
+                        "created_at": now,
+                    },
+                    "differential_id",
+                )
+
+                _trace(
+                    "differential",
+                    differential_id,
+                    relation="compares",
+                    request_id=cross_request_id,
+                    response_id=cross_response_id,
+                    exchange_id=cross_exchange_id,
+                )
+
+            # ----------------------------------------------------------
+            # Reproduction
+            # ----------------------------------------------------------
+
+            if repeat_exchange_id:
+                reproduction_id = stable_id(
+                    "reproduction",
+                    f"{scan_id}:{test_id}:repeat",
+                )
+
+                matched = (
+                    repeat_stable
+                    if repeat_stable is not None
+                    else str(
+                        test.get("reproduction_status") or ""
+                    ).upper() in {
+                        "VERIFIED",
+                        "MATCHED",
+                        "REPRODUCED",
+                    }
+                )
+
+                _upsert(
+                    "reproductions",
+                    {
+                        "reproduction_id": reproduction_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "attempt_no": 1,
+                        "request_id": repeat_request_id,
+                        "response_id": repeat_response_id,
+                        "expected_json": _safe_json({
+                            "stable_cross_account_behavior": True,
+                        }),
+                        "observed_json": _safe_json({
+                            "repeat_response_stable": repeat_stable,
+                            "repeat_owner_matches": _as_bool(
+                                test.get("repeat_owner_matches")
+                            ),
+                            "repeat_sensitive_fields_present": (
+                                _as_bool(
+                                    test.get(
+                                        "repeat_sensitive_fields_present"
+                                    )
+                                )
+                            ),
+                            "reproduction_status": test.get(
+                                "reproduction_status"
+                            ),
+                        }),
+                        "matched": matched,
+                        "stability_score": (
+                            1.0 if matched is True else None
+                        ),
+                        "status": str(
+                            test.get("reproduction_status")
+                            or "OBSERVED"
+                        ),
+                        "created_at": now,
+                    },
+                    "reproduction_id",
+                )
+
+                _trace(
+                    "reproduction",
+                    reproduction_id,
+                    relation="reproduces",
+                    request_id=repeat_request_id,
+                    response_id=repeat_response_id,
+                    exchange_id=repeat_exchange_id,
+                )
+
+            # ----------------------------------------------------------
+            # Impact validation
+            # ----------------------------------------------------------
+
+            if (
+                test.get("impact_proven") is not None
+                or test.get("security_boundary")
+                or sensitive_fields
+            ):
+                impact_id = stable_id(
+                    "impact",
+                    f"{scan_id}:{test_id}:authorization-boundary",
+                )
+
+                impact_proven = _as_bool(
+                    test.get("impact_proven")
+                )
+
+                _upsert(
+                    "impact_validations",
+                    {
+                        "impact_id": impact_id,
+                        "scan_id": scan_id,
+                        "test_run_id": test_run_id,
+                        "contract_type": "authorization_boundary",
+                        "security_boundary": str(
+                            test.get("security_boundary")
+                            or "object-level authorization"
+                        ),
+                        "protected_resource": str(
+                            test.get("endpoint") or endpoint
+                        ),
+                        "affected_actor": str(
+                            test.get("other_identity_label")
+                            or "other actor"
+                        ),
+                        "impact_class": (
+                            "cross-account-data-access"
+                            if sensitive_fields
+                            else "authorization-boundary"
+                        ),
+                        "evidence_json": _safe_json({
+                            "sensitive_fields": sensitive_fields,
+                            "cross_account_exchange_id": (
+                                cross_exchange_id
+                            ),
+                            "repeat_exchange_id": repeat_exchange_id,
+                            "cross_account_status": test.get(
+                                "cross_account_status"
+                            ),
+                            "cross_owner_matches": cross_owner_matches,
+                        }),
+                        "proven": impact_proven,
+                        "status": (
+                            "PROVEN"
+                            if impact_proven is True
+                            else "OBSERVED"
+                        ),
+                        "rationale": (
+                            "Impact state is copied from verifier "
+                            "evidence. The research mapper does not "
+                            "independently promote impact."
+                        ),
+                        "created_at": now,
+                    },
+                    "impact_id",
+                )
+
+                _trace(
+                    "impact",
+                    impact_id,
+                    relation="validates-impact",
+                    request_id=cross_request_id,
+                    response_id=cross_response_id,
+                    exchange_id=cross_exchange_id,
+                    finding_id=test.get("finding_id"),
+                )
+
+            # ----------------------------------------------------------
+            # Evidence graph
+            # ----------------------------------------------------------
+
+            test_node = _evidence_node(
+                "test",
+                test_id,
+                f"Test {test_id}",
+                {
+                    "type": test_type,
+                    "status": str(test.get("status") or ""),
+                },
+            )
+
+            plan_node = _evidence_node(
+                "test_plan",
+                test_plan_id,
+                "Research test plan",
+                {
+                    "category": test_type,
+                    "endpoint": endpoint,
+                    "method": method,
+                },
+            )
+
+            hypothesis_node = None
+
+            if primary_hypothesis_id:
+                hypothesis_node = _evidence_node(
+                    "hypothesis",
+                    primary_hypothesis_id,
+                    "Security hypothesis",
+                    {"category": test_type},
+                )
+
+            if plan_node and test_node:
+                _evidence_edge(
+                    plan_node,
+                    test_node,
+                    "executes",
+                    "Research test plan produced this test run.",
+                )
+
+            if hypothesis_node and plan_node:
+                _evidence_edge(
+                    hypothesis_node,
+                    plan_node,
+                    "drives",
+                    "Hypothesis drives the test plan.",
+                )
+
+            for role, exchange_id in (
+                ("baseline", baseline_exchange_id),
+                ("mutation", cross_exchange_id),
+                ("reproduction", repeat_exchange_id),
+            ):
+                if not exchange_id:
+                    continue
+
+                node = _evidence_node(
+                    "exchange",
+                    exchange_id,
+                    f"{role.title()} exchange",
+                    {"role": role},
+                )
+
+                if test_node and node:
+                    _evidence_edge(
+                        test_node,
+                        node,
+                        f"uses-{role}",
+                    )
+
+            if differential_id:
+                node = _evidence_node(
+                    "differential",
+                    differential_id,
+                    "Authorization differential",
+                )
+                if test_node and node:
+                    _evidence_edge(
+                        test_node,
+                        node,
+                        "produces-differential",
+                    )
+
+            finding_id = test.get("finding_id")
+
+            if finding_id:
+                finding_node = _evidence_node(
+                    "finding",
+                    finding_id,
+                    f"Finding {finding_id}",
+                    {"status": str(test.get("status") or "")},
+                )
+
+                if test_node and finding_node:
+                    _evidence_edge(
+                        test_node,
+                        finding_node,
+                        "supports",
+                        "Existing verification pipeline supplied "
+                        "the finding linkage.",
+                    )
+        # --------------------------------------------------------------
+        # Research decision
+        # --------------------------------------------------------------
+
+        decision_value = (
+            test.get("decision")
+            or test.get("finding_decision")
+            or test.get("verification_decision")
+        )
+
+        if decision_value is not None:
+            if isinstance(decision_value, dict):
+                decision = str(
+                    decision_value.get("decision")
+                    or decision_value.get("status")
+                    or ""
+                )
+                decision_reason = str(
+                    decision_value.get("reason")
+                    or decision_value.get("rationale")
+                    or ""
+                )
+                decision_status = str(
+                    decision_value.get("status")
+                    or decision
+                    or "RECORDED"
+                )
+            else:
+                decision = str(decision_value)
+                decision_reason = str(
+                    test.get("confidence_rationale")
+                    or test.get("reason")
+                    or ""
+                )
+                decision_status = decision
+        else:
+            decision = ""
+            decision_reason = ""
+            decision_status = ""
+
+        if decision or str(test.get("status") or "").upper() in {
+            "VERIFIED",
+            "CONFIRMED",
+            "KILLED",
+            "FALSE_POSITIVE",
+            "CANDIDATE",
+            "UNTESTABLE",
+            "BLOCKED",
+        }:
+            research_decision_id = stable_id(
+                "decision",
+                f"{scan_id}:{test_id}",
+            )
+
+            _upsert(
+                "research_decisions",
+                {
+                    "decision_id": research_decision_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "hypothesis_id": primary_hypothesis_id,
+                    "decision": decision
+                    or str(test.get("status") or "CANDIDATE"),
+                    "status": decision_status
+                    or str(test.get("status") or "RECORDED"),
+                    "reason": decision_reason,
+                    "confidence": test.get("confidence"),
+                    "confidence_rationale": str(
+                        test.get("confidence_rationale")
+                        or test.get("reason")
+                        or ""
+                    ),
+                    "created_at": now,
+                },
+                "decision_id",
+            )
+
+        # --------------------------------------------------------------
+        # Research tool observation
+        # --------------------------------------------------------------
+
+        tool_observation = (
+            test.get("tool_observation")
+            or test.get("scanner_observation")
+        )
+
+        if tool_observation is not None:
+            tool_observation_id = stable_id(
+                "tool-observation",
+                f"{scan_id}:{test_id}",
+            )
+
+            _upsert(
+                "research_tool_observations",
+                {
+                    "tool_observation_id": tool_observation_id,
+                    "scan_id": scan_id,
+                    "test_run_id": test_run_id,
+                    "tool": str(
+                        test.get("tool")
+                        or test.get("module")
+                        or "external-tool"
+                    ),
+                    "observation_json": _safe_json(
+                        tool_observation
+                    ),
+                    "created_at": now,
+                },
+                "tool_observation_id",
+            )
+
+        # --------------------------------------------------------------
+        # Provenance
+        # --------------------------------------------------------------
+
+        provenance_id = stable_id(
+            "provenance",
+            f"{scan_id}:{test_id}",
+        )
+
+        _upsert(
+            "research_provenance",
+            {
+                "provenance_id": provenance_id,
+                "scan_id": scan_id,
+                "test_run_id": test_run_id,
+                "source_type": "test",
+                "source_id": test_id,
+                "source_module": str(
+                    test.get("module")
+                    or test.get("source")
+                    or ""
+                ),
+                "metadata_json": _safe_json(
+                    {
+                        "test_id": test_id,
+                        "test_run_id": test_run_id,
+                        "pipeline_stage": current_stage(test),
+                        "scope_decision": scope_decision,
+                    }
+                ),
+                "created_at": now,
+            },
+            "provenance_id",
+        )
+
+        # --------------------------------------------------------------
+        # Unified canonical trace links
+        #
+        # research_trace_links is the canonical request/response/evidence
+        # trace model. Do not write the obsolete trace_link_id/source_type/
+        # target_type schema here.
+        # --------------------------------------------------------------
+
+        # Test-run provenance.
+        _trace(
+            "test_run",
+            test_run_id,
+            relation="supports",
+        )
+
+        # Test-plan provenance.
+        _trace(
+            "test_plan",
+            test_plan_id,
+            relation="drives",
+        )
+
+        # Observations.
+        for observation_id in observation_ids:
+            _trace(
+                "observation",
+                observation_id,
+                relation="supports",
+            )
+
+        # Hypotheses.
+        for hypothesis_id in hypothesis_ids:
+            _trace(
+                "hypothesis",
+                hypothesis_id,
+                relation="drives",
+            )
+
+        # Legacy differential, when present.
+        if diff_id:
+            _trace(
+                "legacy_diff",
+                diff_id,
+                relation="supports",
+            )
+
+        # Payload provenance.
+        for payload_id in payload_ids:
+            _trace(
+                "payload",
+                payload_id,
+                relation="uses",
+            )
+
+        # Exchange provenance. Resolve the corresponding request/response
+        # identifiers so the dashboard can walk:
+        #
+        # exchange -> request -> response -> test/evidence/finding
+        #
+        # Preserve the semantic role instead of treating every exchange
+        # as an undifferentiated "supports" edge.
+        exchange_roles = (
+            ("baseline_exchange_id", "uses-baseline"),
+            ("test_exchange_id", "uses-test"),
+            ("cross_account_exchange_id", "uses-cross-account"),
+            ("control_exchange_id", "uses-control"),
+            ("negative_control_exchange_id", "uses-negative-control"),
+            ("repeat_exchange_id", "uses-reproduction"),
+        )
+
+        for exchange_key, relation in exchange_roles:
+            exchange_id = named_exchange_ids.get(exchange_key)
+
+            if not exchange_id:
+                continue
+
+            request_id = request_ids.get(exchange_key)
+            response_id = response_ids.get(exchange_key)
+
+            _trace(
+                "exchange",
+                str(exchange_id),
+                relation=relation,
+                request_id=request_id,
+                response_id=response_id,
+                exchange_id=str(exchange_id),
+                finding_id=test.get("finding_id"),
+            )
+
+        # If a nested verifier payload exposed an exchange that was not
+        # one of the named canonical exchanges, retain it as observed
+        # traffic without inventing a vulnerability relationship.
+        named_exchange_set = {
+            str(exchange_id)
+            for exchange_id in named_exchange_ids.values()
+            if exchange_id
+        }
+
+        for exchange_id in dict.fromkeys(nested_exchange_ids):
+            exchange_id = str(exchange_id)
+
+            if exchange_id in named_exchange_set:
+                continue
+
+            request_id, response_id = _lookup_exchange(exchange_id)
+
+            _trace(
+                "exchange",
+                exchange_id,
+                relation="observed",
+                request_id=request_id,
+                response_id=response_id,
+                exchange_id=exchange_id,
+            )
 
 def record_audit_event(con: sqlite3.Connection, *, action: str, object_type: str = "", object_id: str = "", scan_id: str = "", actor: str = "local-user", result: str = "recorded", metadata: Any = None) -> int:
     cur = con.execute("INSERT INTO audit_events(scan_id,timestamp,actor,action,object_type,object_id,result,metadata_json) VALUES (?,?,?,?,?,?,?,?)", (scan_id or None, time.time(), actor, action, object_type or None, object_id or None, result, _json(metadata or {})))

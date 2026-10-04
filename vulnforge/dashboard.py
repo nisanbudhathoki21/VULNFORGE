@@ -120,7 +120,7 @@ def _validate_auth_data(data,target_url,priority):
 def _v2_store():
     """Open the structured scan store without touching an incompatible legacy DB."""
     from vulnforge.core.store import Store as V2Store
-    path=os.path.abspath(os.environ.get("VULNFORGE_SCAN_DB_PATH", "vulnforge.db"))
+    path=os.path.abspath(os.environ.get("VULNFORGE_SCAN_DB_PATH", "data/vulnforge.db"))
     if os.path.isfile(path):
         try:
             uri="file:"+urllib.parse.quote(path)+"?mode=ro"
@@ -368,7 +368,7 @@ async def api_get_vf_dashboard():
 @app.get("/api/vf/settings")
 async def api_get_vf_settings():
     """Expose only canonical, redacted runtime and structured-store metadata."""
-    scan_path=os.path.abspath(os.environ.get("VULNFORGE_SCAN_DB_PATH","vulnforge.db"))
+    scan_path=os.path.abspath(os.environ.get("VULNFORGE_SCAN_DB_PATH","data/vulnforge.db"))
     exists=os.path.isfile(scan_path)
     scan_status=("compatible" if _has_v2_scan_schema(scan_path) else ("incompatible" if exists else "not created yet"))
     try:

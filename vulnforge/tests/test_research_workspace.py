@@ -75,3 +75,203 @@ def test_exchange_request_and_response_ids_are_distinct_and_provenance_filters_w
     assert [row["exchange_id"] for row in rows] == ["follow-up"]
     assert rows[0]["request_id"] == "follow-up:request"
     assert store.list_exchanges(scan_id="scan", module="crawl")[0]["response_id"] == "source:response"
+
+def test_p31f_exchange_authentication_context_persists_to_requests(tmp_path):
+    """P3.1f: exchange authentication context survives DB materialization."""
+
+    import sqlite3
+
+    from vulnforge.core.models import HttpExchange
+    from vulnforge.core.store import Store
+
+    database = tmp_path / "p31f.db"
+
+    # Store() is the application's real database bootstrap path.
+    store = Store(str(database))
+
+    exchange = HttpExchange(
+        method="GET",
+        url="https://example.test/api/records/123",
+        request_headers={
+            "X-Test-Identity": "owner",
+        },
+        status=200,
+        response_headers={
+            "Content-Type": "application/json",
+        },
+        response_body='{"id":"123","name":"test"}',
+        module="p31f-test",
+        authentication_context_id="auth-context-owner",
+    )
+
+    doc = exchange.to_dict()
+
+    assert doc["authentication_context_id"] == "auth-context-owner"
+
+    # Use the same normalized relational persistence function used by
+    # production storage, but through the application's real Store-created DB.
+    with sqlite3.connect(store.path) as con:
+        from vulnforge.core import relational
+
+        relational.materialize_exchange(
+            con,
+            "p31f-scan",
+            doc,
+            project_id="project-default",
+            target_id="",
+        )
+
+        con.commit()
+
+        row = con.execute(
+            """
+            SELECT authentication_context_id
+            FROM requests
+            WHERE request_id = ?
+            """,
+            (exchange.request_id,),
+        ).fetchone()
+
+    assert row is not None, (
+        "P3.1f failed: materialize_exchange() did not create "
+        "the normalized requests record"
+    )
+
+    assert row[0] == "auth-context-owner", (
+        "P3.1f failed: authentication context was not preserved. "
+        f"Expected 'auth-context-owner', got {row[0]!r}"
+    )
+
+
+def test_p31g_identity_authentication_context_session_consistency(tmp_path):
+    """P3.1g: identity, authentication context, and session IDs remain consistent."""
+
+    import sqlite3
+
+    from vulnforge.auth.manager import IdentityManager
+    from vulnforge.auth.models import Identity
+    from vulnforge.core.store import Store
+
+    database = tmp_path / "p31g.db"
+    store = Store(str(database))
+
+    identity_id = "owner"
+    authentication_context_id = "auth-context-owner"
+    session_id = "session-owner"
+
+    identity = Identity(
+        identity_id=identity_id,
+        label="owner",
+        actor="alice",
+        role="owner",
+        authentication_context_id=authentication_context_id,
+        session_id=session_id,
+        authenticated=True,
+        state="authenticated",
+        headers={
+            "X-Test-Identity": "owner",
+        },
+    )
+
+    manager = IdentityManager()
+    manager.register(identity)
+
+    registered = manager.get(identity_id)
+
+    assert registered.authentication_context_id == authentication_context_id
+    assert registered.session_id == session_id
+    assert registered.authenticated is True
+    assert registered.state == "authenticated"
+
+    # Materialize the same identity context into the application's
+    # normalized authentication/session tables.
+    with sqlite3.connect(store.path) as con:
+        con.execute(
+            """
+            INSERT INTO authentication_contexts(
+                authentication_context_id,
+                scan_id,
+                label,
+                actor,
+                redacted_headers_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                authentication_context_id,
+                "p31g-scan",
+                registered.label,
+                registered.actor or registered.label,
+                "{}",
+                0.0,
+            ),
+        )
+
+        con.execute(
+            """
+            INSERT INTO sessions(
+                session_id,
+                authentication_context_id,
+                label,
+                state,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                authentication_context_id,
+                registered.label,
+                registered.state,
+                0.0,
+            ),
+        )
+
+        con.commit()
+
+        context_row = con.execute(
+            """
+            SELECT authentication_context_id, label, actor
+            FROM authentication_contexts
+            WHERE authentication_context_id = ?
+            """,
+            (authentication_context_id,),
+        ).fetchone()
+
+        session_row = con.execute(
+            """
+            SELECT session_id, authentication_context_id, label, state
+            FROM sessions
+            WHERE session_id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+
+    assert context_row is not None, (
+        "P3.1g failed: authentication context was not persisted"
+    )
+
+    assert context_row == (
+        authentication_context_id,
+        "owner",
+        "alice",
+    )
+
+    assert session_row is not None, (
+        "P3.1g failed: session was not persisted"
+    )
+
+    assert session_row == (
+        session_id,
+        authentication_context_id,
+        "owner",
+        "authenticated",
+    )
+
+    # Most important invariant:
+    # Identity -> authentication context -> session must describe
+    # one consistent authentication boundary.
+    assert registered.authentication_context_id == session_row[1]
+    assert registered.session_id == session_row[0]
+

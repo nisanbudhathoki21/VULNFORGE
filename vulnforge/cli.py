@@ -1,5 +1,8 @@
 """VulnForge evidence-led assessment CLI."""
 from __future__ import annotations
+from .auth.models import Identity
+from .auth.manager import IdentityManager
+from .auth.runtime import IdentityRuntime
 import argparse, ipaddress, json, math, os, shutil, signal, sys, time, uuid
 import urllib.parse
 from pathlib import Path
@@ -12,7 +15,7 @@ from .engine.orchestrator import ScanConfig, run_scan
 from .report.json_report import write_json_report
 from .report.renderers import write_html_report, write_markdown_report, write_pdf_report
 
-DEFAULT_DB = os.environ.get("VULNFORGE_SCAN_DB_PATH", "vulnforge.db")
+DEFAULT_DB = os.environ.get("VULNFORGE_SCAN_DB_PATH", "data/vulnforge.db")
 
 def resolve_profiles(profile_arg: str, safety_mode: str = "", severity_flag: str = ""):
     """Resolve priority portfolio separately from safety/resource controls."""
@@ -331,10 +334,14 @@ def _active_requested(args):
 
 
 def _authorized(auth, yes, host, local, *, quiet=False, json_output=False):
-    if not quiet and not json_output:
-        print("VULNFORGE is for authorized assessments only. Scope and request controls remain enforced.")
-    elif json_output:
-        print("VULNFORGE: authorized assessments only; confirm scope before proceeding.", file=sys.stderr)
+    # Authorization enforcement remains unchanged.
+    # Interactive presentation is handled by the live VULNFORGE console.
+    if json_output:
+        print(
+            "VULNFORGE: authorized assessments only; "
+            "confirm scope before proceeding.",
+            file=sys.stderr,
+        )
     if yes or local:
         auth.confirmed=True
         return True
@@ -569,9 +576,77 @@ def cmd_scan(args):
         if not args.json_output: print("Aborted — no requests sent.")
         return 2
     headers,auth_data=_auth_from_file(args.auth)
+
+    # Phase 3 identity runtime.
+    #
+    # Global/static authentication remains in extra_headers.
+    # A login-created session is represented as an Identity and routed
+    # through IdentityRuntime into ScanConfig.identity_headers.
+    identity_manager=IdentityManager()
+    identity_runtime=IdentityRuntime(identity_manager)
+    selected_identity_id=None
+
+    # Automatically register researcher-supplied authorization identities.
+    # These are explicit test contexts from --auth; no credentials are
+    # discovered and no authentication is performed automatically.
+    for identity_id, identity_data in (auth_data.get("identities") or {}).items():
+        if not isinstance(identity_data, dict):
+            raise ValueError(
+                f"auth identity {identity_id!r} must be a mapping"
+            )
+
+        identity_headers = identity_data.get("headers") or {}
+        if not isinstance(identity_headers, dict):
+            raise ValueError(
+                f"auth identity {identity_id!r} headers must be a mapping"
+            )
+
+        identity = Identity(
+            identity_id=str(identity_id),
+            label=str(identity_data.get("label") or identity_id),
+            actor=identity_data.get("actor"),
+            role=identity_data.get("role"),
+            authentication_context_id=identity_data.get(
+                "authentication_context_id"
+            ),
+            session_id=identity_data.get("session_id"),
+            authenticated=True,
+            state="authenticated",
+            headers={
+                str(k): str(v)
+                for k, v in identity_headers.items()
+            },
+            metadata={
+                "source": "auth_file",
+                "authorization_test_identity": True,
+            },
+        )
+
+        identity_manager.register(identity)
+
     if getattr(args,"login",None):
-        login_headers=_run_login_flow(args.login, allowed, args.insecure, args.timeout)
-        headers={**headers, **login_headers}  # session cookie wins over any static auth header of the same name
+        login_headers=_run_login_flow(
+            args.login,
+            allowed,
+            args.insecure,
+            args.timeout,
+        )
+
+        selected_identity_id="login-session"
+
+        identity=Identity(
+            identity_id=selected_identity_id,
+            label="login-session",
+            actor="authenticated-user",
+            headers=dict(login_headers),
+            metadata={
+                "source": "login_flow",
+            },
+        )
+
+        identity_manager.register(identity)
+        identity_manager.mark_authenticated(selected_identity_id)
+        identity_runtime.select(selected_identity_id)
     rate=args.rate if args.rate is not None else (2.0 if active_requested or profile_name in ("safe-active","controlled-active") else 5.0)
     budget=args.max_requests if args.max_requests is not None else (1000 if active_requested or profile_name in ("safe-active","controlled-active") else 5000)
     rate_cap=min(profile.requests_per_second,2.0 if active_requested or profile_name in ("safe-active","controlled-active") else 5.0)
@@ -591,6 +666,11 @@ def cmd_scan(args):
         not_before=scope_policy["not_before"], expires_at=scope_policy["expires_at"],
         allow_private=(args.allow_private or local), authorization_confirmed=True,
         verify_tls=not args.insecure, request_timeout=args.timeout, extra_headers=headers,
+        identity_headers=(
+            identity_runtime.headers()
+            if selected_identity_id
+            else {}
+        ),
         request_rate=rate, request_budget=budget, active_requested=active_requested,
         auto_scheme=("://" not in raw), auth_data=auth_data,test_profile=test_profile,
         test_profile_explicit=profile_explicit,verbose=args.verbose,
@@ -605,19 +685,30 @@ def cmd_scan(args):
     from .cli_ui import LiveScanDashboard, print_banner
     live_ui=None
     if not args.quiet and not args.json_output:
-        if args.verbose:
-            print_banner(color=(not args.no_color and sys.stdout.isatty()))
-        else:
-            live_ui=LiveScanDashboard(target, color=(not args.no_color and sys.stdout.isatty()))
-            if live_ui.tty:
-                live_ui.draw()
-            else:
-                print("VULNFORGE · authorized assessment · concise summary will follow")
+        live_ui=LiveScanDashboard(
+            target,
+            mode=args.mode or "ASSESSMENT",
+            profile=profile_name,
+            color=(not args.no_color and sys.stdout.isatty()),
+        )
+        if live_ui.tty:
+            live_ui.draw()
     def stop(_sig,_frm):
         auth.stop("emergency stop / SIGINT")
         print("\nStopping VULNFORGE; collected state will be persisted.",file=sys.stderr if args.json_output else sys.stdout)
     old=signal.signal(signal.SIGINT,stop)
-    base_event_fn=_emit(True) if args.verbose else (live_ui if live_ui else None)
+    # Terminal ownership:
+    #   TTY live mode -> LiveScanDashboard is the ONLY progress renderer.
+    #   Non-TTY/verbose -> legacy compact emitter may be used.
+    #
+    # This prevents two presentation paths from writing competing frames
+    # to the same terminal during a live scan.
+    if live_ui and live_ui.tty:
+        base_event_fn = live_ui
+    elif args.verbose:
+        base_event_fn = _emit(True)
+    else:
+        base_event_fn = None
     from .core.redaction import redact_url_query_values
     sensitive_headers=set(headers)
     for identity in auth_data.get("identities",{}).values():
@@ -648,7 +739,12 @@ def cmd_scan(args):
                 event_store_warning[0]=True
         if base_event_fn: base_event_fn(kind,safe_message,payload)
     try:
-        result=run_scan(cfg,auth,event_fn=event_fn)
+        result=run_scan(
+            cfg,
+            auth,
+            event_fn=event_fn,
+            identity_manager=identity_manager,
+        )
     except Exception as exc:
         store.finish_scan_record(cfg.scan_id,"failed",time.time())
         try:

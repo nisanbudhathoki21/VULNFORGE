@@ -44,6 +44,7 @@ class Requester:
         timeout: float = 10.0,
         extra_headers: Optional[Dict[str, str]] = None,
         identity_headers: Optional[Dict[str, str]] = None,
+        authentication_context_id: Optional[str] = None,
     ):
         self.authorization = authorization
         self.profile = profile
@@ -54,6 +55,7 @@ class Requester:
         )
         self.budget = RequestBudget(profile.max_requests)
         self.timeout = timeout
+        self.authentication_context_id = authentication_context_id
         self.deadline = time.monotonic() + profile.scan_timeout_s
         headers = {"User-Agent": USER_AGENT,
                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.5",
@@ -106,9 +108,16 @@ class Requester:
         headers: Optional[Dict[str, str]] = None,
         body: Optional[str] = None,
         module: str = "core",
+        authentication_context_id: Optional[str] = None,
         follow_redirects: bool = True,
         max_redirects: int = 5,
     ) -> HttpExchange:
+        effective_authentication_context_id = (
+            authentication_context_id
+            if authentication_context_id is not None
+            else self.authentication_context_id
+        )
+
         current_url = url
         current_method = method
         current_body = body
@@ -266,7 +275,8 @@ class Requester:
     def _to_exchange(self, method: str, url: str, req_headers: Dict[str, str],
                      req_body: Optional[str], resp: httpx.Response,
                      duration_ms: float, module: str, error: Optional[str] = None,
-                     response_body: bytes = b"", response_truncated: bool = False) -> HttpExchange:
+                     response_body: bytes = b"", response_truncated: bool = False,
+                     authentication_context_id: Optional[str] = None) -> HttpExchange:
         cap = self.profile.max_response_bytes
         raw = response_body[:cap]
         truncated = response_truncated
@@ -283,6 +293,7 @@ class Requester:
             response_headers[name]=value
         version=getattr(resp,"http_version","HTTP/1.1") or "HTTP/1.1"
         return HttpExchange(
+            authentication_context_id=authentication_context_id,
             method=method, url=str(request.url or resp.url or url),
             request_headers=request_headers,request_header_items=request_items,
             request_version=version,request_body=request_body,

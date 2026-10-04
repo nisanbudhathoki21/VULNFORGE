@@ -176,3 +176,56 @@ def test_expand_authorization_specs_supports_multi_role_identities():
     assert [item["other_identity"] for item in expanded] == ["manager", "auditor", "guest"]
     assert [item["identity_assertion"]["other_value"] for item in expanded] == ["manager", "auditor", "guest"]
 
+
+
+def test_authorization_identity_resolver_prefers_identity_manager():
+    from types import SimpleNamespace
+
+    from vulnforge.auth.manager import IdentityManager
+    from vulnforge.auth.models import Identity
+    from vulnforge.engine.verification import (
+        _resolve_authorization_identity_headers,
+    )
+
+    manager = IdentityManager()
+
+    manager.register(
+        Identity(
+            identity_id="owner",
+            label="owner",
+            actor="alice",
+            role="owner",
+            headers={
+                "X-Role": "manager-backed-owner",
+                "X-Principal": "alice",
+            },
+        )
+    )
+
+    ctx = SimpleNamespace(
+        identity_manager=manager,
+        config=SimpleNamespace(
+            auth_data={
+                "identities": {
+                    "owner": {
+                        "headers": {
+                            "X-Role": "legacy-owner",
+                        }
+                    }
+                }
+            }
+        ),
+    )
+
+    headers = _resolve_authorization_identity_headers(ctx, "owner")
+
+    assert headers == {
+        "X-Role": "manager-backed-owner",
+        "X-Principal": "alice",
+    }
+
+    # Returned headers must be a copy, not the registered Identity mapping.
+    headers["X-Role"] = "mutated"
+
+    registered = manager.get("owner")
+    assert registered.headers["X-Role"] == "manager-backed-owner"

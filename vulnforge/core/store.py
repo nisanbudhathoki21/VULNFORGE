@@ -171,7 +171,7 @@ def _validate_scans_parent_key(con: sqlite3.Connection, path: str) -> None:
 
 
 class Store:
-    def __init__(self, path: str = "vulnforge.db"):
+    def __init__(self, path: str = "data/vulnforge.db"):
         self.path = path
         self._init()
 

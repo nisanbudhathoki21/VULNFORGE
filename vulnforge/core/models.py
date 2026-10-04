@@ -176,6 +176,7 @@ class HttpExchange:
     duration_ms: float = 0.0
     error: Optional[str] = None
     module: str = ""
+    authentication_context_id: Optional[str] = None
     redirect_chain: List[Dict[str, Any]] = field(default_factory=list)
     exchange_id: str = field(default_factory=lambda: _uid("exchange"))
     request_id: str = field(default_factory=lambda: _uid("request"))
@@ -337,6 +338,7 @@ class ScanContext:
     scan_id: str
     config: Any
     authorization: Any
+    identity_manager: Any = None
     endpoints: Dict[str, Endpoint] = field(default_factory=dict)
     parameters: Dict[str, Parameter] = field(default_factory=dict)
     technologies: Dict[str, Technology] = field(default_factory=dict)
