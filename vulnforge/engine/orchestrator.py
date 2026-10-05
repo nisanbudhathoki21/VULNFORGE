@@ -1137,7 +1137,7 @@ class HypothesisStage(Stage):
 
         # Explicit privilege-escalation hypothesis: requires researcher-supplied
         # role identities and a protected function; endpoint names alone are insufficient.
-        auth_data = ctx.config.auth_data or {}
+        auth_data = getattr(ctx.config, "auth_data", {}) or {}
 
         # Privilege-escalation candidates may be discovered automatically when
         # two researcher-supplied identities are available.  Endpoint naming

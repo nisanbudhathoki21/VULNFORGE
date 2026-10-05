@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Order #{{ order.id }} — QuickCart{% endblock %}
+
+{% block content %}
+<section class="section narrow">
+    <p class="eyebrow">ORDER</p>
+    <h1>#{{ order.id }}</h1>
+
+    {% for item in order.items %}
+    <div class="order-row">
+        <span>Product #{{ item.product_id }}</span>
+        <span>{{ item.quantity }} × ${{ item.price }}</span>
+    </div>
+    {% endfor %}
+
+    <h2>Total ${{ order.total }}</h2>
+</section>
+{% endblock %}

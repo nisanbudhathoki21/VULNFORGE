@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Orders — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+    <div class="container">
+
+        <span class="eyebrow">ORDER HISTORY</span>
+
+        <div class="page-header-row">
+            <div>
+                <h1>Your orders</h1>
+                <p>View orders associated with your account.</p>
+            </div>
+
+            <a
+                class="button button-light"
+                href="{{ url_for("products") }}"
+            >
+                Continue shopping
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+<section class="section">
+    <div class="container">
+
+        {% if orders %}
+
+        <div class="orders-list">
+
+            {% for order in orders %}
+
+            <article class="order-card">
+
+                <div class="order-header">
+
+                    <div>
+                        <span class="card-label">ORDER</span>
+                        <h2>#{{ order.id }}</h2>
+                    </div>
+
+                    <span class="order-status">
+                        {{ order.status }}
+                    </span>
+
+                </div>
+
+                <div class="order-details">
+
+                    <div>
+                        <span>Items</span>
+                        <strong>{{ order.items|length }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Total</span>
+                        <strong>${{ "%.2f"|format(order.total) }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Shipping</span>
+                        <strong>{{ order.shipping_method }}</strong>
+                    </div>
+
+                </div>
+
+            </article>
+
+            {% endfor %}
+
+        </div>
+
+        {% else %}
+
+        <div class="empty-state">
+
+            <span class="empty-icon">□</span>
+
+            <h2>No orders yet</h2>
+
+            <p>
+                Your completed purchases will appear here.
+            </p>
+
+            <a
+                class="button button-dark"
+                href="{{ url_for("products") }}"
+            >
+                Start shopping
+            </a>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+{% endblock %}

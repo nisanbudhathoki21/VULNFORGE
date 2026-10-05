@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#eaf7f1"/><stop offset="1" stop-color="#cfe7dc"/></linearGradient><linearGradient id="bag" x2="1" y2="1"><stop stop-color="#164b3a"/><stop offset="1" stop-color="#2c8062"/></linearGradient></defs>
+<rect width="800" height="800" rx="40" fill="url(#bg)"/>
+<path d="M280 270 Q400 205 520 270 L575 610 Q400 660 225 610Z" fill="url(#bag)"/>
+<path d="M315 275 Q315 170 400 170 Q485 170 485 275" fill="none" stroke="#12392f" stroke-width="38"/>
+<rect x="290" y="380" width="220" height="135" rx="20" fill="#173f33" opacity=".7"/>
+<path d="M250 420 H550 M300 555 H500" stroke="#7ac9a7" stroke-width="12"/>
+<text x="400" y="720" text-anchor="middle" font-family="Arial" font-size="34" font-weight="700" fill="#164b3a">TRAIL PACK 28L</text>
+</svg>

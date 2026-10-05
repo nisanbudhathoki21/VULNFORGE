@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{{ title }} · ShopCart</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                         "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 10% 10%, #1d416e 0, transparent 32%),
+                radial-gradient(circle at 90% 90%, #162d52 0, transparent 35%),
+                #07111f;
+            color: #eaf2ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 18px;
+        }
+
+        .shell {
+            width: min(1080px, 100%);
+            min-height: 700px;
+            display: grid;
+            grid-template-columns: .85fr 1.15fr;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 28px;
+            background: rgba(9,21,37,.94);
+            box-shadow: 0 30px 90px rgba(0,0,0,.45);
+        }
+
+        .brand {
+            padding: 52px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background:
+                linear-gradient(145deg,
+                rgba(39,127,255,.22),
+                rgba(12,25,45,.08));
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 23px;
+            font-weight: 850;
+        }
+
+        .logo-mark {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 13px;
+            background: #277fff;
+            box-shadow: 0 10px 30px rgba(39,127,255,.3);
+        }
+
+        .brand-content {
+            margin-top: 60px;
+        }
+
+        .brand h1 {
+            margin: 0 0 18px;
+            max-width: 410px;
+            font-size: clamp(38px, 5vw, 56px);
+            line-height: 1;
+            letter-spacing: -2.5px;
+        }
+
+        .brand p {
+            max-width: 410px;
+            color: #a9bad0;
+            line-height: 1.7;
+        }
+
+        .features {
+            display: grid;
+            gap: 14px;
+        }
+
+        .feature {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            color: #c8d6e8;
+            font-size: 13px;
+        }
+
+        .check {
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            border-radius: 9px;
+            background: rgba(39,127,255,.15);
+            color: #72adff;
+            font-weight: 900;
+        }
+
+        .form-panel {
+            padding: 48px 54px;
+            overflow-y: auto;
+            background: rgba(5,14,26,.72);
+        }
+
+        .eyebrow {
+            color: #69aaff;
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 850;
+            letter-spacing: 1.6px;
+        }
+
+        h2 {
+            margin: 8px 0;
+            font-size: 34px;
+            letter-spacing: -1px;
+        }
+
+        .intro {
+            margin: 0 0 28px;
+            color: #8fa3bb;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        form {
+            display: grid;
+            gap: 17px;
+        }
+
+        .name-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 8px;
+            color: #cbd8e8;
+            font-size: 13px;
+            font-weight: 750;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 15px;
+            border: 1px solid #263952;
+            border-radius: 12px;
+            outline: none;
+            background: #0b1829;
+            color: #edf5ff;
+            font: inherit;
+            transition: .18s;
+        }
+
+        input:focus {
+            border-color: #277fff;
+            box-shadow: 0 0 0 4px rgba(39,127,255,.1);
+        }
+
+        input::placeholder {
+            color: #5d7088;
+        }
+
+        .password-wrap {
+            position: relative;
+        }
+
+        .password-wrap input {
+            padding-right: 70px;
+        }
+
+        .toggle {
+            position: absolute;
+            right: 9px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: #6fa8e8;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 850;
+        }
+
+        .hint {
+            margin-top: -7px;
+            color: #687d96;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .terms {
+            display: flex;
+            grid-template-columns: none;
+            align-items: flex-start;
+            gap: 10px;
+            color: #8195ad;
+            font-size: 12px;
+            line-height: 1.55;
+            font-weight: 500;
+        }
+
+        .terms input {
+            width: 17px;
+            height: 17px;
+            margin-top: 1px;
+            padding: 0;
+            accent-color: #277fff;
+            flex: 0 0 auto;
+        }
+
+        .terms a {
+            color: #6aaaff;
+            text-decoration: none;
+        }
+
+        .errors {
+            margin-bottom: 18px;
+            padding: 13px 15px;
+            border: 1px solid rgba(248,113,113,.3);
+            border-radius: 12px;
+            background: rgba(127,29,29,.18);
+            color: #fca5a5;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .errors ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .submit {
+            width: 100%;
+            padding: 15px;
+            border: 0;
+            border-radius: 13px;
+            background: #277fff;
+            color: white;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 850;
+            box-shadow: 0 12px 28px rgba(39,127,255,.2);
+        }
+
+        .submit:hover {
+            background: #3b8bff;
+        }
+
+        .signin {
+            text-align: center;
+            color: #8195ad;
+            font-size: 13px;
+        }
+
+        .signin a {
+            color: #69aaff;
+            text-decoration: none;
+            font-weight: 800;
+        }
+
+        .security {
+            margin-top: 4px;
+            padding: 12px 14px;
+            border-radius: 11px;
+            background: rgba(255,255,255,.025);
+            color: #667b94;
+            font-size: 11px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        @media (max-width: 820px) {
+            .shell {
+                grid-template-columns: 1fr;
+            }
+
+            .brand {
+                display: none;
+            }
+
+            .form-panel {
+                padding: 36px 25px;
+            }
+        }
+
+        @media (max-width: 500px) {
+            .name-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h2 {
+                font-size: 29px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<main class="shell">
+
+    <section class="brand">
+
+        <div>
+            <div class="logo">
+                <span class="logo-mark">S</span>
+                ShopCart
+            </div>
+
+            <div class="brand-content">
+                <h1>Everything you need, in one cart.</h1>
+
+                <p>
+                    Create your account to manage orders, save your
+                    shopping preferences and enjoy a faster checkout.
+                </p>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <span class="check">✓</span>
+                Secure customer account
+            </div>
+
+            <div class="feature">
+                <span class="check">✓</span>
+                Order tracking and history
+            </div>
+
+            <div class="feature">
+                <span class="check">✓</span>
+                Fast checkout experience
+            </div>
+        </div>
+
+    </section>
+
+    <section class="form-panel">
+
+        <div class="eyebrow">ShopCart Account</div>
+
+        <h2>Create your account</h2>
+
+        <p class="intro">
+            Join ShopCart with your email address and a strong password.
+            We'll ask you to verify your email before activating the account.
+        </p>
+
+        {% if errors %}
+        <div class="errors">
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form
+            method="post"
+            action="{{ url_for('account_signup') }}"
+            novalidate
+        >
+
+            <div class="name-grid">
+
+                <label>
+                    First name
+
+                    <input
+                        type="text"
+                        name="first_name"
+                        autocomplete="given-name"
+                        placeholder="First name"
+                        value="{{ request.form.get('first_name', '') }}"
+                        required
+                    >
+                </label>
+
+                <label>
+                    Last name
+
+                    <input
+                        type="text"
+                        name="last_name"
+                        autocomplete="family-name"
+                        placeholder="Last name"
+                        value="{{ request.form.get('last_name', '') }}"
+                        required
+                    >
+                </label>
+
+            </div>
+
+            <label>
+                Email address
+
+                <input
+                    type="email"
+                    name="email"
+                    autocomplete="email"
+                    placeholder="you@example.com"
+                    value="{{ request.form.get('email', '') }}"
+                    required
+                >
+            </label>
+
+            <label>
+                Password
+
+                <div class="password-wrap">
+
+                    <input
+                        id="password"
+                        type="password"
+                        name="password"
+                        autocomplete="new-password"
+                        placeholder="Create a strong password"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="toggle"
+                        onclick="togglePassword('password', this)"
+                    >
+                        SHOW
+                    </button>
+
+                </div>
+            </label>
+
+            <div class="hint">
+                Minimum 8 characters · uppercase · lowercase · number ·
+                special character
+            </div>
+
+            <label>
+                Confirm password
+
+                <div class="password-wrap">
+
+                    <input
+                        id="confirm_password"
+                        type="password"
+                        name="confirm_password"
+                        autocomplete="new-password"
+                        placeholder="Repeat your password"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="toggle"
+                        onclick="togglePassword('confirm_password', this)"
+                    >
+                        SHOW
+                    </button>
+
+                </div>
+            </label>
+
+            <label class="terms">
+
+                <input
+                    type="checkbox"
+                    name="terms"
+                    value="accepted"
+                    {% if request.form.get('terms') %}checked{% endif %}
+                    required
+                >
+
+                <span>
+                    I agree to the ShopCart
+                    <a href="#" onclick="return false;">Terms of Service</a>
+                    and understand that email verification is required
+                    before my account can be used.
+                </span>
+
+            </label>
+
+            <button class="submit" type="submit">
+                Create account
+            </button>
+
+            <div class="security">
+                Your password is protected using server-side password
+                hashing. ShopCart will never display your password.
+            </div>
+
+            <div class="signin">
+                Already have an account?
+                <a href="{{ url_for('account_signin') }}">
+                    Sign in
+                </a>
+            </div>
+
+        </form>
+
+    </section>
+
+</main>
+
+<script>
+function togglePassword(id, button) {
+    const input = document.getElementById(id);
+
+    if (input.type === "password") {
+        input.type = "text";
+        button.textContent = "HIDE";
+    } else {
+        input.type = "password";
+        button.textContent = "SHOW";
+    }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Create account — QuickCart{% endblock %}
+
+{% block content %}
+<section class="form-page">
+    <p class="eyebrow">JOIN QUICKCART</p>
+    <h1>Create account</h1>
+
+    <form method="post" class="form">
+        <label>Full name
+            <input type="text" name="name" required minlength="2" maxlength="80"
+                   pattern="[A-Za-z][A-Za-z '\-]{1,79}">
+        </label>
+
+        <label>Email
+            <input type="email" name="email" required maxlength="254"
+                   autocomplete="email">
+        </label>
+
+        <label>Password
+            <input type="password" name="password" required minlength="10"
+                   maxlength="128" autocomplete="new-password">
+        </label>
+
+        <label>Confirm password
+            <input type="password" name="confirmation" required minlength="10"
+                   maxlength="128" autocomplete="new-password">
+        </label>
+
+        <button class="button" type="submit">Create account</button>
+    </form>
+</section>
+{% endblock %}

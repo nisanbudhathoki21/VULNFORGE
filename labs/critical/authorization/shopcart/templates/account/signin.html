@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sign In — ShopCart</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family:
+                Inter,
+                ui-sans-serif,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+
+            min-height: 100vh;
+
+            background:
+                radial-gradient(
+                    circle at 15% 20%,
+                    rgba(99, 102, 241, 0.18),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at 85% 80%,
+                    rgba(14, 165, 233, 0.14),
+                    transparent 30%
+                ),
+                #f7f9fc;
+
+            color: #172033;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 32px 20px;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 1080px;
+
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+
+            background: #ffffff;
+
+            border: 1px solid #e7eaf0;
+
+            border-radius: 28px;
+
+            overflow: hidden;
+
+            box-shadow:
+                0 25px 70px rgba(15, 23, 42, 0.12);
+        }
+
+        /* -------------------------------------------------
+           BRAND PANEL
+        ------------------------------------------------- */
+
+        .brand-panel {
+            position: relative;
+
+            padding: 58px;
+
+            color: white;
+
+            overflow: hidden;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #111827 0%,
+                    #172554 55%,
+                    #1d4ed8 100%
+                );
+        }
+
+        .brand-panel::before {
+            content: "";
+
+            position: absolute;
+
+            width: 360px;
+            height: 360px;
+
+            border-radius: 50%;
+
+            background: rgba(255,255,255,0.06);
+
+            top: -140px;
+            right: -120px;
+        }
+
+        .brand-panel::after {
+            content: "";
+
+            position: absolute;
+
+            width: 260px;
+            height: 260px;
+
+            border-radius: 50%;
+
+            background: rgba(96,165,250,0.10);
+
+            bottom: -120px;
+            left: -90px;
+        }
+
+        .brand-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+
+            font-size: 25px;
+            font-weight: 800;
+
+            letter-spacing: -0.5px;
+
+            margin-bottom: 75px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+
+            border-radius: 13px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background: rgba(255,255,255,0.12);
+
+            border: 1px solid rgba(255,255,255,0.18);
+
+            font-size: 22px;
+        }
+
+        .brand h1 {
+            font-size: 27px;
+        }
+
+        .hero-title {
+            font-size: 43px;
+
+            line-height: 1.08;
+
+            letter-spacing: -1.5px;
+
+            margin-bottom: 20px;
+        }
+
+        .hero-description {
+            color: #cbd5e1;
+
+            line-height: 1.7;
+
+            font-size: 16px;
+
+            max-width: 430px;
+        }
+
+        .feature-list {
+            margin-top: 42px;
+
+            display: grid;
+
+            gap: 18px;
+        }
+
+        .feature {
+            display: flex;
+
+            align-items: center;
+
+            gap: 14px;
+
+            color: #e2e8f0;
+
+            font-size: 14px;
+        }
+
+        .feature-icon {
+            width: 34px;
+            height: 34px;
+
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 10px;
+
+            background: rgba(255,255,255,0.10);
+
+            color: #93c5fd;
+        }
+
+        /* -------------------------------------------------
+           FORM PANEL
+        ------------------------------------------------- */
+
+        .form-panel {
+            padding: 58px 55px;
+
+            display: flex;
+
+            align-items: center;
+        }
+
+        .form-wrapper {
+            width: 100%;
+
+            max-width: 420px;
+
+            margin: auto;
+        }
+
+        .form-header {
+            margin-bottom: 34px;
+        }
+
+        .form-header h2 {
+            font-size: 31px;
+
+            letter-spacing: -0.8px;
+
+            margin-bottom: 9px;
+        }
+
+        .form-header p {
+            color: #64748b;
+
+            font-size: 14px;
+        }
+
+        /* -------------------------------------------------
+           ERROR
+        ------------------------------------------------- */
+
+        .error-box {
+            margin-bottom: 22px;
+
+            padding: 14px 16px;
+
+            border-radius: 12px;
+
+            background: #fff1f2;
+
+            border: 1px solid #fecdd3;
+
+            color: #be123c;
+
+            font-size: 13px;
+
+            line-height: 1.5;
+        }
+
+        /* -------------------------------------------------
+           FORM
+        ------------------------------------------------- */
+
+        .field {
+            margin-bottom: 20px;
+        }
+
+        .field label {
+            display: block;
+
+            margin-bottom: 8px;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+            color: #334155;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+
+            height: 52px;
+
+            padding: 0 48px 0 15px;
+
+            border: 1px solid #dbe1ea;
+
+            border-radius: 12px;
+
+            outline: none;
+
+            background: #fbfcfe;
+
+            color: #172033;
+
+            font-size: 14px;
+
+            transition:
+                border-color .2s,
+                box-shadow .2s,
+                background .2s;
+        }
+
+        .input-wrapper input:focus {
+            background: #ffffff;
+
+            border-color: #2563eb;
+
+            box-shadow:
+                0 0 0 4px rgba(37,99,235,0.10);
+        }
+
+        .input-wrapper input.invalid {
+            border-color: #ef4444;
+
+            box-shadow:
+                0 0 0 3px rgba(239,68,68,0.08);
+        }
+
+        .input-icon {
+            position: absolute;
+
+            right: 15px;
+
+            top: 50%;
+
+            transform: translateY(-50%);
+
+            color: #94a3b8;
+
+            font-size: 17px;
+
+            pointer-events: none;
+        }
+
+        .password-toggle {
+            position: absolute;
+
+            right: 13px;
+
+            top: 50%;
+
+            transform: translateY(-50%);
+
+            border: none;
+
+            background: transparent;
+
+            cursor: pointer;
+
+            color: #64748b;
+
+            padding: 6px;
+
+            font-size: 13px;
+        }
+
+        .password-toggle:hover {
+            color: #2563eb;
+        }
+
+        .field-error {
+            display: none;
+
+            margin-top: 7px;
+
+            color: #dc2626;
+
+            font-size: 12px;
+        }
+
+        /* -------------------------------------------------
+           OPTIONS
+        ------------------------------------------------- */
+
+        .form-options {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            margin: 5px 0 25px;
+        }
+
+        .remember {
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+            color: #64748b;
+
+            font-size: 13px;
+
+            cursor: pointer;
+        }
+
+        .remember input {
+            width: 16px;
+            height: 16px;
+
+            accent-color: #2563eb;
+        }
+
+        .forgot {
+            color: #2563eb;
+
+            font-size: 13px;
+
+            font-weight: 600;
+
+            text-decoration: none;
+        }
+
+        .forgot:hover {
+            text-decoration: underline;
+        }
+
+        /* -------------------------------------------------
+           BUTTON
+        ------------------------------------------------- */
+
+        .signin-button {
+            width: 100%;
+
+            height: 53px;
+
+            border: none;
+
+            border-radius: 13px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #2563eb,
+                    #1d4ed8
+                );
+
+            color: white;
+
+            font-size: 14px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+            box-shadow:
+                0 10px 25px rgba(37,99,235,0.22);
+
+            transition:
+                transform .2s,
+                box-shadow .2s;
+        }
+
+        .signin-button:hover {
+            transform: translateY(-1px);
+
+            box-shadow:
+                0 14px 30px rgba(37,99,235,0.28);
+        }
+
+        .signin-button:active {
+            transform: translateY(0);
+        }
+
+        .signin-button.loading {
+            opacity: .7;
+
+            cursor: wait;
+        }
+
+        /* -------------------------------------------------
+           DIVIDER
+        ------------------------------------------------- */
+
+        .divider {
+            display: flex;
+
+            align-items: center;
+
+            gap: 14px;
+
+            margin: 28px 0;
+
+            color: #94a3b8;
+
+            font-size: 12px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+
+            flex: 1;
+
+            height: 1px;
+
+            background: #e5e7eb;
+        }
+
+        /* -------------------------------------------------
+           SIGN UP
+        ------------------------------------------------- */
+
+        .signup-link {
+            text-align: center;
+
+            color: #64748b;
+
+            font-size: 14px;
+        }
+
+        .signup-link a {
+            color: #2563eb;
+
+            font-weight: 700;
+
+            text-decoration: none;
+        }
+
+        .signup-link a:hover {
+            text-decoration: underline;
+        }
+
+        .security-note {
+            margin-top: 30px;
+
+            padding: 13px 15px;
+
+            border-radius: 12px;
+
+            background: #f8fafc;
+
+            border: 1px solid #edf0f4;
+
+            display: flex;
+
+            gap: 10px;
+
+            color: #64748b;
+
+            font-size: 11px;
+
+            line-height: 1.5;
+        }
+
+        .security-note span:first-child {
+            font-size: 15px;
+        }
+
+        /* -------------------------------------------------
+           RESPONSIVE
+        ------------------------------------------------- */
+
+        @media (max-width: 850px) {
+
+            .page {
+                grid-template-columns: 1fr;
+
+                max-width: 520px;
+            }
+
+            .brand-panel {
+                display: none;
+            }
+
+            .form-panel {
+                padding: 45px 30px;
+            }
+        }
+
+        @media (max-width: 450px) {
+
+            body {
+                padding: 15px;
+            }
+
+            .page {
+                border-radius: 20px;
+            }
+
+            .form-panel {
+                padding: 35px 22px;
+            }
+
+            .form-header h2 {
+                font-size: 27px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <!-- =================================================
+         BRAND / EXPERIENCE PANEL
+    ================================================== -->
+
+    <section class="brand-panel">
+
+        <div class="brand-content">
+
+            <div class="brand">
+                <div class="brand-icon">🛍</div>
+                <h1>ShopCart</h1>
+            </div>
+
+            <h2 class="hero-title">
+                Welcome back to
+                your shopping space.
+            </h2>
+
+            <p class="hero-description">
+                Sign in to manage your orders, track deliveries,
+                update your profile, and continue shopping with
+                your ShopCart account.
+            </p>
+
+            <div class="feature-list">
+
+                <div class="feature">
+                    <div class="feature-icon">✓</div>
+                    <span>Track your orders in real time</span>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">✓</div>
+                    <span>Manage your account securely</span>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">✓</div>
+                    <span>Personalized shopping experience</span>
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =================================================
+         LOGIN FORM
+    ================================================== -->
+
+    <section class="form-panel">
+
+        <div class="form-wrapper">
+
+            <div class="form-header">
+
+                <h2>Sign in</h2>
+
+                <p>
+                    Enter your account details to continue.
+                </p>
+
+            </div>
+
+
+            {% if error %}
+
+            <div class="error-box">
+                {{ error }}
+            </div>
+
+            {% endif %}
+
+
+            {% if errors %}
+
+            <div class="error-box">
+
+                {% for item in errors %}
+                    <div>{{ item }}</div>
+                {% endfor %}
+
+            </div>
+
+            {% endif %}
+
+
+            <form
+                method="POST"
+                action="{{ url_for('account_signin') }}"
+                id="signinForm"
+                novalidate
+            >
+
+                <!-- EMAIL -->
+
+                <div class="field">
+
+                    <label for="email">
+                        Email address
+                    </label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            autocomplete="email"
+                            placeholder="you@example.com"
+                            value="{{ request.form.get('email', '') }}"
+                            required
+                        >
+
+                        <span class="input-icon">
+                            ✉
+                        </span>
+
+                    </div>
+
+                    <div
+                        class="field-error"
+                        id="emailError"
+                    >
+                        Enter a valid email address.
+                    </div>
+
+                </div>
+
+
+                <!-- PASSWORD -->
+
+                <div class="field">
+
+                    <label for="password">
+                        Password
+                    </label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            id="password"
+                            name="password"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            required
+                        >
+
+                        <button
+                            type="button"
+                            class="password-toggle"
+                            id="passwordToggle"
+                            aria-label="Show password"
+                        >
+                            Show
+                        </button>
+
+                    </div>
+
+                    <div
+                        class="field-error"
+                        id="passwordError"
+                    >
+                        Password is required.
+                    </div>
+
+                </div>
+
+
+                <!-- OPTIONS -->
+
+                <div class="form-options">
+
+                    <label class="remember">
+
+                        <input
+                            type="checkbox"
+                            name="remember"
+                            value="1"
+                        >
+
+                        <span>Remember me</span>
+
+                    </label>
+
+                    <a
+                        href="#"
+                        class="forgot"
+                        onclick="return false;"
+                    >
+                        Forgot password?
+                    </a>
+
+                </div>
+
+
+                <!-- SUBMIT -->
+
+                <button
+                    type="submit"
+                    class="signin-button"
+                    id="signinButton"
+                >
+                    Sign in to ShopCart
+                </button>
+
+            </form>
+
+
+            <div class="divider">
+                <span>New to ShopCart?</span>
+            </div>
+
+
+            <div class="signup-link">
+
+                Don't have an account?
+
+                <a href="{{ url_for('account_signup') }}">
+                    Create an account
+                </a>
+
+            </div>
+
+
+            <div class="security-note">
+
+                <span>🔒</span>
+
+                <span>
+                    Your account credentials are processed by
+                    this local ShopCart security lab. Never use
+                    real passwords or personal credentials here.
+                </span>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+
+<script>
+    /*
+     * ----------------------------------------------------
+     * EMAIL VALIDATION
+     * ----------------------------------------------------
+     */
+
+    const emailInput =
+        document.getElementById("email");
+
+    const emailError =
+        document.getElementById("emailError");
+
+    const emailPattern =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+    function validateEmail() {
+
+        const value =
+            emailInput.value.trim();
+
+        if (!value) {
+
+            emailInput.classList.add("invalid");
+
+            emailError.textContent =
+                "Email address is required.";
+
+            emailError.style.display =
+                "block";
+
+            return false;
+        }
+
+        if (!emailPattern.test(value)) {
+
+            emailInput.classList.add("invalid");
+
+            emailError.textContent =
+                "Enter a valid email address.";
+
+            emailError.style.display =
+                "block";
+
+            return false;
+        }
+
+        emailInput.classList.remove("invalid");
+
+        emailError.style.display =
+            "none";
+
+        return true;
+    }
+
+
+    emailInput.addEventListener(
+        "blur",
+        validateEmail
+    );
+
+
+    emailInput.addEventListener(
+        "input",
+        () => {
+
+            if (
+                emailInput.classList.contains(
+                    "invalid"
+                )
+            ) {
+                validateEmail();
+            }
+
+        }
+    );
+
+
+    /*
+     * ----------------------------------------------------
+     * PASSWORD VALIDATION
+     * ----------------------------------------------------
+     */
+
+    const passwordInput =
+        document.getElementById("password");
+
+    const passwordError =
+        document.getElementById("passwordError");
+
+
+    function validatePassword() {
+
+        if (!passwordInput.value) {
+
+            passwordInput.classList.add(
+                "invalid"
+            );
+
+            passwordError.textContent =
+                "Password is required.";
+
+            passwordError.style.display =
+                "block";
+
+            return false;
+        }
+
+        passwordInput.classList.remove(
+            "invalid"
+        );
+
+        passwordError.style.display =
+            "none";
+
+        return true;
+    }
+
+
+    passwordInput.addEventListener(
+        "blur",
+        validatePassword
+    );
+
+
+    /*
+     * ----------------------------------------------------
+     * SHOW / HIDE PASSWORD
+     * ----------------------------------------------------
+     */
+
+    const passwordToggle =
+        document.getElementById(
+            "passwordToggle"
+        );
+
+
+    passwordToggle.addEventListener(
+        "click",
+        () => {
+
+            const visible =
+                passwordInput.type === "text";
+
+            passwordInput.type =
+                visible
+                    ? "password"
+                    : "text";
+
+            passwordToggle.textContent =
+                visible
+                    ? "Show"
+                    : "Hide";
+
+            passwordToggle.setAttribute(
+                "aria-label",
+                visible
+                    ? "Show password"
+                    : "Hide password"
+            );
+
+        }
+    );
+
+
+    /*
+     * ----------------------------------------------------
+     * FORM SUBMISSION
+     * ----------------------------------------------------
+     */
+
+    const form =
+        document.getElementById("signinForm");
+
+    const button =
+        document.getElementById(
+            "signinButton"
+        );
+
+
+    form.addEventListener(
+        "submit",
+        function(event) {
+
+            const validEmail =
+                validateEmail();
+
+            const validPassword =
+                validatePassword();
+
+            if (
+                !validEmail ||
+                !validPassword
+            ) {
+
+                event.preventDefault();
+
+                return;
+            }
+
+
+            button.classList.add(
+                "loading"
+            );
+
+            button.textContent =
+                "Signing you in…";
+
+            button.disabled = true;
+
+        }
+    );
+</script>
+
+</body>
+</html>

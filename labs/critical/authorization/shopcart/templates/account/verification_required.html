@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ title or "Verify Your Email" }} — ShopCart</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .verification-page {
+            min-height: 75vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 20px;
+        }
+
+        .verification-card {
+            width: 100%;
+            max-width: 620px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            padding: 44px;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+            text-align: center;
+        }
+
+        .verification-icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 32px;
+        }
+
+        .verification-card h1 {
+            margin: 0 0 12px;
+            font-size: 30px;
+            color: #111827;
+        }
+
+        .verification-card p {
+            color: #6b7280;
+            line-height: 1.7;
+            margin: 10px 0;
+        }
+
+        .account-email {
+            display: inline-block;
+            margin: 18px 0;
+            padding: 10px 16px;
+            border-radius: 10px;
+            background: #f3f4f6;
+            color: #111827;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .verification-action {
+            margin-top: 28px;
+        }
+
+        .verify-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 0 24px;
+            border-radius: 10px;
+            background: #2563eb;
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 700;
+            transition: 0.2s ease;
+        }
+
+        .verify-button:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+
+        .lab-note {
+            margin-top: 30px;
+            padding: 16px 18px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .lab-note strong {
+            color: #334155;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 24px;
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="verification-page">
+        <section class="verification-card">
+
+            <div class="verification-icon">
+                ✉
+            </div>
+
+            <h1>Verify your email</h1>
+
+            <p>
+                Your ShopCart account has been created successfully.
+                Before you can sign in, you need to verify your email address.
+            </p>
+
+            <div class="account-email">
+                {{ email }}
+            </div>
+
+            <p>
+                In this local security lab, the verification message is
+                simulated through the Flask development server.
+            </p>
+
+            {% if verification_url %}
+            <div class="verification-action">
+                <a class="verify-button"
+                   href="{{ verification_url }}">
+                    Verify Email Address
+                </a>
+            </div>
+            {% endif %}
+
+            <div class="lab-note">
+                <strong>Local Lab Notice</strong><br>
+                This is an isolated VULNFORGE training environment.
+                No real email is sent. The verification URL is printed
+                in the Flask server console.
+            </div>
+
+            <a class="back-link"
+               href="{{ url_for('account_signin') }}">
+                Back to Sign In
+            </a>
+
+        </section>
+    </main>
+
+</body>
+</html>

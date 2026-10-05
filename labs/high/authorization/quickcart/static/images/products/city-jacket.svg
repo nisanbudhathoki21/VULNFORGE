@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#eef1f6"/><stop offset="1" stop-color="#d5dbe5"/></linearGradient><linearGradient id="j" x2="1" y2="1"><stop stop-color="#111827"/><stop offset="1" stop-color="#394456"/></linearGradient></defs>
+<rect width="800" height="800" rx="40" fill="url(#bg)"/>
+<path d="M300 210 L400 180 L500 210 L570 330 L515 365 L500 610 H300 L285 365 L230 330Z" fill="url(#j)"/>
+<path d="M400 185 V610 M315 355 H365 M435 355 H485" stroke="#8b96a8" stroke-width="12"/>
+<path d="M325 235 L400 305 L475 235" fill="none" stroke="#596579" stroke-width="12"/>
+<text x="400" y="700" text-anchor="middle" font-family="Arial" font-size="34" font-weight="700" fill="#111827">CITY JACKET</text>
+</svg>

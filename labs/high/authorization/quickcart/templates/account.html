@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Account — QuickCart{% endblock %}
+
+{% block content %}
+<section class="form-page">
+    <p class="eyebrow">MY ACCOUNT</p>
+    <h1>{{ user.name }}</h1>
+
+    <div class="account-meta">
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Role:</strong> {{ user.role }}</p>
+    </div>
+
+    <form method="post" class="form">
+        <label>Full name
+            <input type="text" name="name" value="{{ user.name }}"
+                   required minlength="2" maxlength="80">
+        </label>
+
+        <label>Phone
+            <input type="tel" name="phone" value="{{ user.phone }}"
+                   required pattern="[0-9]{10,15}">
+        </label>
+
+        <button class="button" type="submit">Save profile</button>
+    </form>
+</section>
+{% endblock %}

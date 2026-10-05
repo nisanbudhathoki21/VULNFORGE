@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} — QuickCart{% endblock %}
+
+{% block content %}
+<section class="form-page">
+    <p class="eyebrow">ERROR</p>
+    <h1>{{ code }}</h1>
+    <p>{{ message }}</p>
+    <a class="button" href="{{ url_for('home') }}">Return home</a>
+</section>
+{% endblock %}

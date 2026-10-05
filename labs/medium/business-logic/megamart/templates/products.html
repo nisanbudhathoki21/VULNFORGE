@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Products — MegaMart{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div class="container">
+        <span class="eyebrow">MEGAMART COLLECTION</span>
+        <div class="page-header-row">
+            <div>
+                <h1>All products</h1>
+                <p>Explore the complete MegaMart collection.</p>
+            </div>
+            <span class="result-count">{{ products|length }} products</span>
+        </div>
+    </div>
+</section>
+
+<section class="section products-section">
+    <div class="container">
+
+        <div class="category-bar">
+            <a class="category-active" href="{{ url_for("products") }}">All</a>
+            <span>Footwear</span>
+            <span>Clothing</span>
+            <span>Electronics</span>
+            <span>Accessories</span>
+            <span>Home</span>
+            <span>Lifestyle</span>
+            <span>Bags</span>
+        </div>
+
+        <div class="product-grid">
+            {% for product in products %}
+            <article class="product-card">
+
+                <a class="product-image"
+                   href="{{ url_for("product", product_id=product.id) }}">
+                    <img src="{{ product.image }}"
+                         alt="{{ product.name }}"
+                         loading="lazy">
+                </a>
+
+                <div class="product-info">
+                    <div class="product-meta">
+                        <span>{{ product.category }}</span>
+
+                        {% if product.stock <= 10 %}
+                        <span class="stock-warning">Limited stock</span>
+                        {% endif %}
+                    </div>
+
+                    <a class="product-name"
+                       href="{{ url_for("product", product_id=product.id) }}">
+                        {{ product.name }}
+                    </a>
+
+                    <div class="product-bottom">
+                        <span class="product-price">
+                            ${{ "%.2f"|format(product.price) }}
+                        </span>
+                        <span class="product-arrow">↗</span>
+                    </div>
+                </div>
+
+            </article>
+            {% endfor %}
+        </div>
+
+    </div>
+</section>
+{% endblock %}

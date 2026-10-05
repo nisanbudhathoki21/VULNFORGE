@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f1f3f7"/><stop offset="1" stop-color="#dfe4ec"/></linearGradient><linearGradient id="cloth" x2="1" y2="1"><stop stop-color="#252b38"/><stop offset="1" stop-color="#555f72"/></linearGradient></defs>
+<rect width="800" height="800" rx="40" fill="url(#bg)"/>
+<path d="M275 250 Q400 165 525 250 L610 330 L550 400 L510 350 V600 H290 V350 L250 400 L190 330Z" fill="url(#cloth)"/>
+<path d="M335 220 Q400 285 465 220" fill="none" stroke="#aeb7c7" stroke-width="18"/>
+<path d="M325 460 H475 V560 H325Z" fill="#313949" opacity=".9"/>
+<text x="400" y="700" text-anchor="middle" font-family="Arial" font-size="34" font-weight="700" fill="#252b38">URBAN HOODIE</text>
+</svg>

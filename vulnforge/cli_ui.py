@@ -266,11 +266,21 @@ class LiveScanDashboard:
     def finish(self, context) -> None:
         from collections import Counter
 
-        self.status = (
-            "STOPPED"
-            if getattr(context, "stop_reason", "")
-            else "COMPLETE"
+        from .core.scan_status import scan_status
+
+        canonical_status = scan_status(
+            type("_Scan", (), {
+                "context": context,
+                "aborted": False,
+            })()
         )
+
+        self.status = {
+            "target_unreachable": "INCOMPLETE",
+            "partial": "LIMITED",
+            "aborted": "STOPPED",
+            "completed": "COMPLETE",
+        }.get(canonical_status, "INCOMPLETE")
 
         stats = getattr(context, "stats", None)
 

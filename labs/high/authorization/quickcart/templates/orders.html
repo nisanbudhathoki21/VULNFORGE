@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Orders — QuickCart{% endblock %}
+
+{% block content %}
+<section class="section narrow">
+    <p class="eyebrow">ACCOUNT</p>
+    <h1>Your orders</h1>
+
+    {% for order in orders %}
+    <div class="order-row">
+        <div>
+            <strong>Order #{{ order.id }}</strong>
+            <p>{{ order.items|length }} item(s)</p>
+        </div>
+        <strong>${{ order.total }}</strong>
+        <a href="{{ url_for('order', order_id=order.id) }}">View</a>
+    </div>
+    {% else %}
+    <p>No orders yet.</p>
+    {% endfor %}
+</section>
+{% endblock %}

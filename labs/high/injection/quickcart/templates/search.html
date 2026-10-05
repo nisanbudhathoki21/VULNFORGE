@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="hero">
+
+    <h1>Product Search</h1>
+
+    <form action="/search">
+
+        <input
+            name="q"
+            value="{{ query }}"
+            placeholder="Search..."
+        >
+
+        <button>
+            Search
+        </button>
+
+    </form>
+
+</section>
+
+<div class="notice">
+    Search results for:
+    <strong>{{ query }}</strong>
+</div>
+
+<div class="grid">
+
+    {% for p in products %}
+
+    <div class="card">
+
+        <h2>{{ p.name }}</h2>
+
+        <p>{{ p.category }}</p>
+
+        <div class="price">
+            ${{ p.price }}
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+{% endblock %}

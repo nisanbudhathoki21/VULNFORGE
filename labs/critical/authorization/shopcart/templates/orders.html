@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="hero">
+    <h1>My Orders</h1>
+
+    <p>
+        Current user:
+        <strong>{{ user }}</strong>
+    </p>
+</section>
+
+<table>
+
+    <tr>
+        <th>Order</th>
+        <th>Product</th>
+        <th>Price</th>
+        <th>Status</th>
+        <th>Action</th>
+    </tr>
+
+    {% for order_id, order in orders %}
+
+    <tr>
+
+        <td>#{{ order_id }}</td>
+
+        <td>{{ order.product }}</td>
+
+        <td>${{ order.price }}</td>
+
+        <td>
+            <span class="badge">
+                {{ order.status }}
+            </span>
+        </td>
+
+        <td>
+            <a class="btn"
+               href="/orders/{{ order_id }}">
+                View
+            </a>
+        </td>
+
+    </tr>
+
+    {% endfor %}
+
+</table>
+
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="hero">
+
+    <h1>QuickCart</h1>
+
+    <p>
+        Fast online shopping.
+    </p>
+
+    <form action="/search">
+
+        <input
+            name="q"
+            placeholder="Search products..."
+        >
+
+        <button>
+            Search
+        </button>
+
+    </form>
+
+</section>
+
+<div class="grid">
+
+    {% for p in products %}
+
+    <div class="card">
+
+        <h2>{{ p.name }}</h2>
+
+        <p>{{ p.category }}</p>
+
+        <div class="price">
+            ${{ p.price }}
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+{% endblock %}

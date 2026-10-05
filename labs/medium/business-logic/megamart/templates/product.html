@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="product-detail-section">
+    <div class="container">
+
+        <a class="back-link" href="{{ url_for("products") }}">
+            ← Back to products
+        </a>
+
+        <div class="product-detail">
+
+            <div class="product-detail-image">
+                <img
+                    src="{{ product.image }}"
+                    alt="{{ product.name }}"
+                >
+            </div>
+
+            <div class="product-detail-info">
+
+                <span class="eyebrow">
+                    {{ product.category }}
+                </span>
+
+                <h1>{{ product.name }}</h1>
+
+                <div class="detail-price">
+                    ${{ "%.2f"|format(product.price) }}
+                </div>
+
+                <p class="detail-description">
+                    {{ product.description }}
+                </p>
+
+                <div class="availability">
+                    <span class="availability-dot"></span>
+
+                    {% if product.stock > 0 %}
+                        {{ product.stock }} available
+                    {% else %}
+                        Out of stock
+                    {% endif %}
+                </div>
+
+                {% if product.stock > 0 %}
+
+                <form
+                    class="add-cart-form"
+                    action="{{ url_for("add_to_cart") }}"
+                    method="post"
+                >
+
+                    <input
+                        type="hidden"
+                        name="product_id"
+                        value="{{ product.id }}"
+                    >
+
+                    <label for="quantity">Quantity</label>
+
+                    <div class="purchase-row">
+
+                        <input
+                            id="quantity"
+                            name="quantity"
+                            type="number"
+                            min="1"
+                            max="{{ product.stock }}"
+                            value="1"
+                            required
+                        >
+
+                        <button
+                            class="button button-dark"
+                            type="submit"
+                        >
+                            Add to cart
+                        </button>
+
+                    </div>
+
+                </form>
+
+                {% else %}
+
+                <button
+                    class="button button-disabled"
+                    disabled
+                >
+                    Out of stock
+                </button>
+
+                {% endif %}
+
+                <div class="product-assurance">
+
+                    <div>
+                        <strong>Server-validated pricing</strong>
+                        <span>Prices are calculated from the product catalog.</span>
+                    </div>
+
+                    <div>
+                        <strong>Secure order processing</strong>
+                        <span>Cart and checkout values are validated server-side.</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Checkout — QuickCart{% endblock %}
+
+{% block content %}
+<section class="checkout">
+    <div>
+        <p class="eyebrow">CHECKOUT</p>
+        <h1>Delivery details</h1>
+
+        <form method="post" class="form">
+            <label>Full name
+                <input name="name" required minlength="2" maxlength="80"
+                       pattern="[A-Za-z][A-Za-z '\-]{1,79}">
+            </label>
+
+            <label>Phone
+                <input name="phone" required pattern="[0-9]{10,15}">
+            </label>
+
+            <label>Address
+                <textarea name="address" required minlength="10"
+                          maxlength="200"></textarea>
+            </label>
+
+            <button class="button" type="submit">Place order</button>
+        </form>
+    </div>
+
+    <aside class="summary">
+        <h2>Order summary</h2>
+        <p>Subtotal ${{ "%.2f"|format(summary.subtotal) }}</p>
+        <p>Discount -${{ "%.2f"|format(summary.discount) }}</p>
+        <p>Shipping ${{ "%.2f"|format(summary.shipping) }}</p>
+        <p>Tax ${{ "%.2f"|format(summary.tax) }}</p>
+        <hr>
+        <h2>Total ${{ "%.2f"|format(summary.total) }}</h2>
+    </aside>
+</section>
+{% endblock %}

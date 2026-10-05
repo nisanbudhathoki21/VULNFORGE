@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+
+    <h1>Order #{{ order_id }}</h1>
+
+    <p>
+        Product:
+        <strong>{{ order.product }}</strong>
+    </p>
+
+    <p>
+        Price:
+        <strong>${{ order.price }}</strong>
+    </p>
+
+    <p>
+        Customer:
+        <strong>{{ order.user_id }}</strong>
+    </p>
+
+    <p>
+        Status:
+        <span class="badge">
+            {{ order.status }}
+        </span>
+    </p>
+
+</div>
+
+{% endblock %}

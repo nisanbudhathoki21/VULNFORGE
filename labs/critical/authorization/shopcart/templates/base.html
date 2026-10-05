@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover"
+    >
+
+    <meta
+        name="description"
+        content="ShopCart — contemporary clothing designed for everyday life."
+    >
+
+    <title>{% block title %}ShopCart{% endblock %}</title>
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap"
+        rel="stylesheet"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+
+    <!-- Announcement -->
+    <div class="announcement-bar">
+        <div class="announcement-track">
+            <span>FREE SHIPPING ON ORDERS OVER $100</span>
+            <span class="announcement-dot">•</span>
+            <span>NEW SEASON / NEW ESSENTIALS</span>
+            <span class="announcement-dot">•</span>
+            <span>SECURE CHECKOUT</span>
+        </div>
+    </div>
+
+    <!-- Main navigation -->
+    <header class="site-header" id="site-header">
+        <div class="nav-container">
+
+            <button
+                class="mobile-menu-toggle"
+                type="button"
+                aria-label="Open navigation menu"
+                aria-controls="mobile-navigation"
+                aria-expanded="false"
+                onclick="toggleMobileMenu()"
+            >
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="{{ url_for('home') }}" class="brand" aria-label="ShopCart home">
+                <span class="brand-mark">SC</span>
+                <span class="brand-name">SHOPCART</span>
+            </a>
+
+            <nav class="desktop-navigation" aria-label="Main navigation">
+                <a href="{{ url_for('home') }}">Home</a>
+                <a href="{{ url_for('products') }}">Shop</a>
+                <a href="{{ url_for('products') }}?category=Men">Men</a>
+                <a href="{{ url_for('products') }}?category=Women">Women</a>
+                <a href="{{ url_for('products') }}?category=Unisex">Unisex</a>
+                <a href="{{ url_for('products') }}?sort=new">New Arrivals</a>
+                <a href="{{ url_for('products') }}?sale=1" class="nav-sale">Sale</a>
+            </nav>
+
+            <div class="nav-actions">
+
+                <button
+                    class="nav-icon-button"
+                    type="button"
+                    aria-label="Search"
+                    onclick="openSearch()"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6.5"></circle>
+                        <path d="M16 16l5 5"></path>
+                    </svg>
+                </button>
+
+                {% if session.get('user') %}
+                    <a
+                        href="{{ url_for('account') }}"
+                        class="nav-icon-button"
+                        aria-label="Your account"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="8" r="3.5"></circle>
+                            <path d="M5 20c.8-3.5 3.2-5.5 7-5.5s6.2 2 7 5.5"></path>
+                        </svg>
+                    </a>
+                {% else %}
+                    <a
+                        href="{{ url_for('account_signin') }}"
+                        class="nav-icon-button"
+                        aria-label="Sign in"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="8" r="3.5"></circle>
+                            <path d="M5 20c.8-3.5 3.2-5.5 7-5.5s6.2 2 7 5.5"></path>
+                        </svg>
+                    </a>
+                {% endif %}
+
+                <a
+                    href="#"
+                    class="nav-icon-button bag-button"
+                    aria-label="Shopping bag"
+                    onclick="openCart(event)"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 8h14l-1 12H6L5 8z"></path>
+                        <path d="M9 8V6a3 3 0 0 1 6 0v2"></path>
+                    </svg>
+                    <span class="cart-count" id="cart-count">0</span>
+                </a>
+
+            </div>
+        </div>
+
+        <!-- Mobile navigation -->
+        <div
+            class="mobile-navigation"
+            id="mobile-navigation"
+            aria-hidden="true"
+        >
+            <a href="{{ url_for('home') }}" onclick="closeMobileMenu()">Home</a>
+            <a href="{{ url_for('products') }}" onclick="closeMobileMenu()">Shop All</a>
+            <a href="{{ url_for('products') }}?category=Men" onclick="closeMobileMenu()">Men</a>
+            <a href="{{ url_for('products') }}?category=Women" onclick="closeMobileMenu()">Women</a>
+            <a href="{{ url_for('products') }}?category=Unisex" onclick="closeMobileMenu()">Unisex</a>
+            <a href="{{ url_for('products') }}?sort=new" onclick="closeMobileMenu()">New Arrivals</a>
+            <a href="{{ url_for('products') }}?sale=1" onclick="closeMobileMenu()">Sale</a>
+
+            <div class="mobile-navigation-divider"></div>
+
+            {% if session.get('user') %}
+                <a href="{{ url_for('account') }}" onclick="closeMobileMenu()">
+                    My Account
+                </a>
+                <a href="{{ url_for('orders') }}" onclick="closeMobileMenu()">
+                    My Orders
+                </a>
+                <a href="{{ url_for('account_signout') }}" onclick="closeMobileMenu()">
+                    Sign Out
+                </a>
+            {% else %}
+                <a href="{{ url_for('account_signin') }}" onclick="closeMobileMenu()">
+                    Sign In
+                </a>
+                <a href="{{ url_for('account_signup') }}" onclick="closeMobileMenu()">
+                    Create Account
+                </a>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Search overlay -->
+    <div
+        class="search-overlay"
+        id="search-overlay"
+        aria-hidden="true"
+    >
+        <div class="search-panel">
+
+            <div class="search-panel-header">
+                <span class="eyebrow">SEARCH SHOPCART</span>
+
+                <button
+                    type="button"
+                    class="search-close"
+                    aria-label="Close search"
+                    onclick="closeSearch()"
+                >
+                    ×
+                </button>
+            </div>
+
+            <form
+                class="global-search-form"
+                action="{{ url_for('products') }}"
+                method="get"
+            >
+                <label for="global-search" class="sr-only">
+                    Search products
+                </label>
+
+                <input
+                    id="global-search"
+                    name="q"
+                    type="search"
+                    placeholder="Search clothing, essentials, outerwear..."
+                    autocomplete="off"
+                >
+
+                <button type="submit">
+                    Search
+                </button>
+            </form>
+
+            <div class="search-suggestions">
+                <span>Popular:</span>
+                <a href="{{ url_for('products') }}?q=hoodie">Hoodies</a>
+                <a href="{{ url_for('products') }}?q=denim">Denim</a>
+                <a href="{{ url_for('products') }}?q=jacket">Jackets</a>
+                <a href="{{ url_for('products') }}?q=tee">T-Shirts</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main page -->
+    <main class="site-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">
+                            <span>{{ message }}</span>
+                            <button
+                                type="button"
+                                aria-label="Dismiss notification"
+                                onclick="this.parentElement.remove()"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Toast -->
+    <div
+        id="shopcart-toast"
+        class="shopcart-toast"
+        role="status"
+        aria-live="polite"
+    >
+        <span class="toast-icon">✓</span>
+        <span id="toast-message">Added to your bag</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+
+        <div class="footer-main">
+
+            <div class="footer-brand-column">
+                <a href="{{ url_for('home') }}" class="footer-brand">
+                    SHOPCART
+                </a>
+
+                <p>
+                    Contemporary essentials designed for
+                    everyday movement.
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h3>Shop</h3>
+                <a href="{{ url_for('products') }}">All Products</a>
+                <a href="{{ url_for('products') }}?category=Men">Men</a>
+                <a href="{{ url_for('products') }}?category=Women">Women</a>
+                <a href="{{ url_for('products') }}?category=Unisex">Unisex</a>
+                <a href="{{ url_for('products') }}?sort=new">New Arrivals</a>
+                <a href="{{ url_for('products') }}?sale=1">Sale</a>
+            </div>
+
+            <div class="footer-column">
+                <h3>Help</h3>
+                {% if session.get('user') %}
+                    <a href="{{ url_for('orders') }}">Orders</a>
+                    <a href="{{ url_for('profile') }}">Profile</a>
+                    <a href="{{ url_for('account') }}">Account</a>
+                {% else %}
+                    <a href="{{ url_for('account_signin') }}">Sign In</a>
+                    <a href="{{ url_for('account_signup') }}">Create Account</a>
+                {% endif %}
+                <a href="{{ url_for('home') }}#shipping">Shipping</a>
+                <a href="{{ url_for('home') }}#returns">Returns</a>
+            </div>
+
+            <div class="footer-column footer-newsletter">
+                <h3>Stay in the loop</h3>
+                <p>
+                    New drops, limited releases and seasonal edits.
+                </p>
+
+                <form
+                    class="newsletter-form"
+                    onsubmit="handleNewsletter(event)"
+                >
+                    <label for="newsletter-email" class="sr-only">
+                        Email address
+                    </label>
+
+                    <input
+                        id="newsletter-email"
+                        type="email"
+                        placeholder="Email address"
+                        required
+                    >
+
+                    <button type="submit" aria-label="Subscribe">
+                        →
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+        <div class="footer-bottom">
+            <span>© 2026 ShopCart</span>
+            <span>Built for authorized security testing.</span>
+        </div>
+
+    </footer>
+
+    <script>
+        /*
+         * ShopCart frontend shell.
+         * Cart state is intentionally client-side for guest browsing.
+         * Authentication is enforced by the checkout/order flow.
+         */
+
+        const CART_STORAGE_KEY = "shopcart_guest_cart";
+
+        function getCart() {
+            try {
+                const raw = localStorage.getItem(CART_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+
+                if (!Array.isArray(parsed)) {
+                    return [];
+                }
+
+                return parsed;
+            } catch (error) {
+                console.warn("Unable to read ShopCart cart.", error);
+                return [];
+            }
+        }
+
+        function saveCart(cart) {
+            try {
+                localStorage.setItem(
+                    CART_STORAGE_KEY,
+                    JSON.stringify(cart)
+                );
+            } catch (error) {
+                console.warn("Unable to save ShopCart cart.", error);
+            }
+
+            updateCartCount();
+        }
+
+        function updateCartCount() {
+            const countElement = document.getElementById("cart-count");
+
+            if (!countElement) {
+                return;
+            }
+
+            const total = getCart().reduce(
+                (sum, item) => sum + Number(item.quantity || 0),
+                0
+            );
+
+            countElement.textContent = total > 99 ? "99+" : String(total);
+
+            countElement.classList.toggle("is-visible", total > 0);
+        }
+
+        function openCart(event) {
+            if (event) {
+                event.preventDefault();
+            }
+
+            window.dispatchEvent(new CustomEvent("shopcart:open-cart"));
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("shopcart-toast");
+            const text = document.getElementById("toast-message");
+
+            if (!toast || !text) {
+                return;
+            }
+
+            text.textContent = message;
+
+            toast.classList.add("is-visible");
+
+            window.clearTimeout(
+                window.shopcartToastTimer
+            );
+
+            window.shopcartToastTimer = window.setTimeout(
+                () => {
+                    toast.classList.remove("is-visible");
+                },
+                2600
+            );
+        }
+
+        function openSearch() {
+            const overlay = document.getElementById("search-overlay");
+            const input = document.getElementById("global-search");
+
+            if (!overlay) {
+                return;
+            }
+
+            overlay.classList.add("is-open");
+            overlay.setAttribute("aria-hidden", "false");
+
+            document.body.classList.add("search-open");
+
+            window.setTimeout(() => {
+                if (input) {
+                    input.focus();
+                }
+            }, 100);
+        }
+
+        function closeSearch() {
+            const overlay = document.getElementById("search-overlay");
+
+            if (!overlay) {
+                return;
+            }
+
+            overlay.classList.remove("is-open");
+            overlay.setAttribute("aria-hidden", "true");
+
+            document.body.classList.remove("search-open");
+        }
+
+        function toggleMobileMenu() {
+            const button = document.querySelector(
+                ".mobile-menu-toggle"
+            );
+
+            const navigation = document.getElementById(
+                "mobile-navigation"
+            );
+
+            if (!button || !navigation) {
+                return;
+            }
+
+            const open = button.getAttribute("aria-expanded") === "true";
+
+            button.setAttribute(
+                "aria-expanded",
+                String(!open)
+            );
+
+            navigation.setAttribute(
+                "aria-hidden",
+                String(open)
+            );
+
+            navigation.classList.toggle(
+                "is-open",
+                !open
+            );
+
+            document.body.classList.toggle(
+                "mobile-menu-open",
+                !open
+            );
+        }
+
+        function closeMobileMenu() {
+            const button = document.querySelector(
+                ".mobile-menu-toggle"
+            );
+
+            const navigation = document.getElementById(
+                "mobile-navigation"
+            );
+
+            if (button) {
+                button.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+
+            if (navigation) {
+                navigation.setAttribute(
+                    "aria-hidden",
+                    "true"
+                );
+
+                navigation.classList.remove(
+                    "is-open"
+                );
+            }
+
+            document.body.classList.remove(
+                "mobile-menu-open"
+            );
+        }
+
+        function handleNewsletter(event) {
+            event.preventDefault();
+
+            const input = document.getElementById(
+                "newsletter-email"
+            );
+
+            if (!input) {
+                return;
+            }
+
+            if (!input.checkValidity()) {
+                input.reportValidity();
+                return;
+            }
+
+            input.value = "";
+
+            showToast(
+                "You're on the ShopCart list."
+            );
+        }
+
+        document.addEventListener(
+            "keydown",
+            function(event) {
+                if (event.key === "Escape") {
+                    closeSearch();
+                    closeMobileMenu();
+                }
+            }
+        );
+
+        document.addEventListener(
+            "click",
+            function(event) {
+                const overlay = document.getElementById(
+                    "search-overlay"
+                );
+
+                if (
+                    overlay &&
+                    event.target === overlay
+                ) {
+                    closeSearch();
+                }
+            }
+        );
+
+        window.addEventListener(
+            "storage",
+            updateCartCount
+        );
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            function() {
+                updateCartCount();
+
+                const header = document.getElementById(
+                    "site-header"
+                );
+
+                if (header) {
+                    window.addEventListener(
+                        "scroll",
+                        function() {
+                            header.classList.toggle(
+                                "is-scrolled",
+                                window.scrollY > 12
+                            );
+                        },
+                        { passive: true }
+                    );
+                }
+            }
+        );
+
+        window.shopcart = {
+            getCart,
+            saveCart,
+            updateCartCount,
+            showToast
+        };
+    </script>
+
+    {% block scripts %}{% endblock %}
+
+</body>
+</html>

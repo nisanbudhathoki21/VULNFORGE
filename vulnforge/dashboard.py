@@ -220,7 +220,8 @@ async def _run_v2_scan_task(scan_id, config, authorization, store):
         from vulnforge.engine.orchestrator import _run_async
         result=await _run_async(config,authorization,event_fn=on_event)
         await asyncio.to_thread(store.save_scan,result)
-        runtime["status"]=("aborted" if result.aborted else ("partial" if result.context.stop_reason else "completed"))
+        from .core.scan_status import scan_status
+        runtime["status"] = scan_status(result)
         runtime["finished_at"]=time.time()
         final={"kind":"scan-complete","message":f"Scan {runtime['status']}",
                "data":{"scan_id":scan_id,"status":runtime["status"]},"timestamp":time.time()}

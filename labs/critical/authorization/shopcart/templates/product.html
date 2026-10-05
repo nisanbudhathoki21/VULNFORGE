@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+
+    <h1>{{ product.name }}</h1>
+
+    <p>{{ product.description }}</p>
+
+    <div class="price">
+        ${{ product.price }}
+    </div>
+
+    <button onclick="alert('Product added to cart')">
+        Add to Cart
+    </button>
+
+</div>
+
+{% endblock %}

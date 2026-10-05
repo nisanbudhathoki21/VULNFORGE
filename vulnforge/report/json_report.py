@@ -215,7 +215,14 @@ def build_report_dict(scan) -> Dict[str, Any]:
             "started_at": ctx.stats.started_at,
             "duration_s": round(duration, 2),
             "aborted": scan.aborted,
-            "status": ("stopped" if scan.aborted else ("partial" if ctx.stop_reason else "completed")),
+            "status": __import__(
+                "vulnforge.core.scan_status",
+                fromlist=["scan_status"],
+            ).scan_status(scan),
+            "assessment_status": __import__(
+                "vulnforge.core.scan_status",
+                fromlist=["assessment_status"],
+            ).assessment_status(scan),
             "stop_reason": ctx.stop_reason,
             "stage_timings": scan.stage_timings,
             "report_paths": getattr(scan,"report_paths",{}),

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Admin — QuickCart{% endblock %}
+
+{% block content %}
+<section class="section">
+    <p class="eyebrow">ADMINISTRATION</p>
+    <h1>QuickCart Admin</h1>
+
+    <div class="admin-grid">
+        <div class="panel">
+            <h2>Users</h2>
+            {% for user in users %}
+            <p>
+                <strong>{{ user.name }}</strong><br>
+                {{ user.email }} · {{ user.role }}
+            </p>
+            {% endfor %}
+        </div>
+
+        <div class="panel">
+            <h2>Products</h2>
+            {% for product in products %}
+            <p>{{ product.name }} — ${{ "%.2f"|format(product.price) }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="panel">
+            <h2>Orders</h2>
+            {% for order in orders %}
+            <p>Order #{{ order.id }} — ${{ order.total }}</p>
+            {% else %}
+            <p>No orders.</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

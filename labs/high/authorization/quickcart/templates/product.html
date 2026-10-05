@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} — QuickCart{% endblock %}
+
+{% block content %}
+<section class="product-detail">
+    <div class="detail-image">
+        <span>{{ product.category }}</span>
+        <div class="product-image">
+    <img
+        src="{{ product.image }}"
+        alt="{{ product.name }}"
+        loading="lazy"
+    >
+</div>
+    </div>
+
+    <div>
+        <p class="eyebrow">{{ product.category }}</p>
+        <h1>{{ product.name }}</h1>
+        <p class="large-price">${{ "%.2f"|format(product.price) }}</p>
+        <p>{{ product.description }}</p>
+        <p class="stock">{{ product.stock }} available</p>
+
+        <form id="add-cart-form">
+            <input type="hidden" id="product-id" value="{{ product.id }}">
+            <label>
+                Quantity
+                <input id="quantity" type="number" min="1" max="{{ product.stock }}" value="1">
+            </label>
+            <button class="button" type="submit">Add to bag</button>
+        </form>
+
+        <p id="cart-result"></p>
+    </div>
+</section>
+{% endblock %}

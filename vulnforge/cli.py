@@ -395,13 +395,17 @@ def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
         for test in tests
     )
 
-    state = (
-        "STOPPED"
-        if result.aborted
-        else "LIMITED"
-        if getattr(context, "stop_reason", "")
-        else "COMPLETE"
-    )
+    from .core.scan_status import assessment_status, scan_status, status_reason
+
+    canonical_status = scan_status(result)
+    assessment = assessment_status(result)
+
+    state = {
+        "aborted": "STOPPED",
+        "target_unreachable": "INCOMPLETE",
+        "partial": "LIMITED",
+        "completed": "COMPLETE",
+    }.get(canonical_status, "INCOMPLETE")
 
     def clean(value):
         return _terminal_safe(redact_text(str(value)))
@@ -430,10 +434,42 @@ def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
             print(f"  {kind.upper():5} {path}")
         return
 
+    if canonical_status == "target_unreachable":
+        print()
+        print("VULNFORGE · SCAN INCOMPLETE")
+        print("─" * 40)
+        print(f"Target       {target}")
+        print(f"Scan ID      {context.scan_id}")
+        print()
+        print("STATUS       TARGET UNREACHABLE")
+        print("ASSESSMENT   NOT ASSESSED")
+        print()
+        print("Reason")
+        print(f"  {clean(status_reason(context))}")
+        print()
+        print("DISCOVERY")
+        print(f"  Requests     {getattr(context.stats, 'requests_sent', 0)}")
+        print(f"  Pages        {getattr(context.stats, 'pages_crawled', 0)}")
+        print(f"  Endpoints    {len(getattr(context, 'endpoints', {}))}")
+        print(f"  Parameters   {len(getattr(context, 'parameters', {}))}")
+        print()
+        print("FINDINGS")
+        print(f"  Confirmed    {finding_counts.get('CONFIRMED', 0)}")
+        print(f"  Unconfirmed  {finding_counts.get('UNCONFIRMED', 0)}")
+        print()
+        print("⚠ No security assessment was performed because")
+        print("  the target could not be reached.")
+        print()
+        print("Reports")
+        for kind, path in existing_reports():
+            print(f"  {kind.upper():5} {path}")
+        return
+
     # ------------------------------------------------------------------
     # DISCOVERY
     # ------------------------------------------------------------------
     section("DISCOVERY")
+    print(f"Scan ID       {context.scan_id}")
     print(f"Endpoints     {len(getattr(context, 'endpoints', {}))}")
     print(f"Parameters    {len(getattr(context, 'parameters', {}))}")
     print(f"Requests      {getattr(context.stats, 'requests_sent', 0)}")
@@ -579,46 +615,6 @@ def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
             "No unverified hypothesis was promoted "
             "to a confirmed finding."
         )
-
-    # ------------------------------------------------------------------
-    # FINAL SUMMARY
-    # ------------------------------------------------------------------
-    print()
-    print("VULNFORGE · SCAN COMPLETE")
-    print("─" * 40)
-    print(f"Target       {target}")
-    print(f"Scan ID      {context.scan_id}")
-    print()
-    print(
-        f"Requests     "
-        f"{getattr(context.stats, 'requests_sent', 0)}"
-    )
-    print(
-        f"Endpoints    "
-        f"{len(getattr(context, 'endpoints', {}))}"
-    )
-    print(
-        f"Parameters   "
-        f"{len(getattr(context, 'parameters', {}))}"
-    )
-    print()
-    print(
-        f"Confirmed     "
-        f"{finding_counts.get('CONFIRMED', 0)}"
-    )
-    print(
-        f"Unconfirmed   "
-        f"{finding_counts.get('UNCONFIRMED', 0)}"
-    )
-    print(
-        f"Informational "
-        f"{finding_counts.get('INFORMATIONAL', 0)}"
-    )
-    print()
-    print("Reports")
-
-    for kind, path in existing_reports():
-        print(f"  {kind.upper():5} {path}")
 
 def cmd_scan(args):
     # Fall back to env vars for local credential/scope file paths so a real
@@ -873,7 +869,8 @@ def cmd_scan(args):
     files={"html":write_html_report(result,paths["html"]),"pdf":write_pdf_report(result,paths["pdf"]),
            "json":write_json_report(result,paths["json"]),"md":write_markdown_report(result,paths["md"])}
     store.save_scan(result)
-    final_status=("stopped" if result.aborted else ("partial" if ctx.stop_reason else "completed"))
+    from .core.scan_status import scan_status
+    final_status = scan_status(result)
     store.record_event(ctx.scan_id,{"kind":"report-generated","message":"Structured reports generated from the stored scan result.",
         "timestamp":time.time(),"data":{"formats":["html","pdf","json","md"]}})
     store.record_audit("report_generated", object_type="scan", object_id=ctx.scan_id, scan_id=ctx.scan_id, metadata={"formats":["html","pdf","json","md"]})

@@ -357,7 +357,7 @@ class Store:
                 "scope_json=excluded.scope_json,audit_json=excluded.audit_json",
                 (ctx.scan_id, redact_any(ctx.config.target), ctx.config.profile_name,
                  ctx.stats.started_at, ctx.stats.finished_at,
-                 "aborted" if scan.aborted else ("partial" if ctx.stop_reason else "completed"),
+                 __import__("vulnforge.core.scan_status", fromlist=["scan_status"]).scan_status(scan),
                  json.dumps(ctx.stats.to_dict()),
                  json.dumps(redact_any(ctx.authorization.describe())),
                  json.dumps(redact_any(ctx.authorization.audit_dump()))))
@@ -374,7 +374,8 @@ class Store:
                 host_id = stable_id("host", f"{ctx.scan_id}:{hostname}")
                 con.execute("INSERT OR REPLACE INTO hosts(host_id,target_id,scan_id,hostname,ip_address,source,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?)", (host_id, target_id, ctx.scan_id, hostname, None, "target", now, now))
                 con.execute("INSERT OR REPLACE INTO ports(port_id,host_id,port,scheme,service,source) VALUES (?,?,?,?,?,?)", (stable_id("port", f"{host_id}:{parsed_target.port or (443 if parsed_target.scheme == 'https' else 80)}"), host_id, parsed_target.port or (443 if parsed_target.scheme == "https" else 80), parsed_target.scheme, "https" if parsed_target.scheme == "https" else "http", "target"))
-            final_status = "aborted" if scan.aborted else ("partial" if ctx.stop_reason else "completed")
+            from .scan_status import scan_status
+            final_status = scan_status(scan)
             con.execute("INSERT OR REPLACE INTO scan_runs(scan_id,project_id,target_id,profile,status,started_at,finished_at,statistics_json) VALUES (?,?,?,?,?,?,?,?)", (ctx.scan_id, "project-default", target_id, ctx.config.profile_name, final_status, ctx.stats.started_at, ctx.stats.finished_at, json.dumps(ctx.stats.to_dict())))
             # Persist identity labels and redacted auth context metadata only;
             # passwords, tokens, cookies, and API keys never enter this table.

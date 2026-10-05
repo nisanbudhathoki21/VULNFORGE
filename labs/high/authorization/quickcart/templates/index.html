@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}QuickCart — Modern Essentials{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">NEW SEASON</p>
+        <h1>Everything you need.<br>Nothing you don't.</h1>
+        <p>Curated everyday essentials with fast local delivery.</p>
+        <a class="button" href="{{ url_for('products') }}">Shop collection</a>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <p class="eyebrow">FEATURED</p>
+            <h2>Popular right now</h2>
+        </div>
+        <a href="{{ url_for('products') }}">View all →</a>
+    </div>
+
+    <div class="grid">
+        {% for product in products[:8] %}
+        <article class="card">
+            <div class="product-image">
+                <span>{{ product.category }}</span>
+                <div class="product-image">
+    <img
+        src="{{ product.image }}"
+        alt="{{ product.name }}"
+        loading="lazy"
+    >
+</div>
+            </div>
+            <div class="product-info">
+                <p>{{ product.category }}</p>
+                <h3>{{ product.name }}</h3>
+                <strong>${{ "%.2f"|format(product.price) }}</strong>
+                <a href="{{ url_for('product', product_id=product.id) }}">View product</a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

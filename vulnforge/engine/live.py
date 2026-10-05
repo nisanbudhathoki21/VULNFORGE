@@ -32,6 +32,10 @@ def classify_live_state(status: Any, error: str = "", redirect_chain: Iterable[A
     low = str(error or "").lower()
     if "timeout" in low or "timed out" in low:
         return "TIMEOUT"
-    if "connection refused" in low or "connect call failed" in low and "111" in low:
+    if (
+        "connection refused" in low
+        or ("connect call failed" in low and "111" in low)
+        or "all connection attempts failed" in low
+    ):
         return "DEAD"
     return "UNKNOWN"

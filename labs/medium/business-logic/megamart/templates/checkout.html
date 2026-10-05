@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+    <div class="container">
+
+        <span class="eyebrow">MEGAMART CHECKOUT</span>
+
+        <div class="page-header-row">
+            <div>
+                <h1>Complete your order</h1>
+                <p>Review the server-calculated order total.</p>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+
+<section class="section">
+    <div class="container">
+
+        <div class="checkout-layout">
+
+            <div class="checkout-card">
+
+                <span class="card-label">ORDER REVIEW</span>
+
+                <h2>Your items</h2>
+
+                {% for item in cart %}
+
+                <div class="checkout-item">
+
+                    <img
+                        src="{{ item.product.image }}"
+                        alt="{{ item.product.name }}"
+                    >
+
+                    <div>
+                        <strong>{{ item.product.name }}</strong>
+                        <span>
+                            {{ item.quantity }} ×
+                            ${{ "%.2f"|format(item.product.price) }}
+                        </span>
+                    </div>
+
+                    <strong>
+                        ${{ "%.2f"|format(item.line_total) }}
+                    </strong>
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+
+            <aside class="checkout-summary">
+
+                <span class="card-label">PAYMENT SUMMARY</span>
+
+                <h2>Order total</h2>
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <strong>${{ "%.2f"|format(subtotal) }}</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <strong>${{ "%.2f"|format(shipping) }}</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Tax</span>
+                    <strong>${{ "%.2f"|format(tax) }}</strong>
+                </div>
+
+                <div class="summary-total">
+                    <span>Total</span>
+                    <strong>${{ "%.2f"|format(total) }}</strong>
+                </div>
+
+                <form
+                    action="{{ url_for("checkout") }}"
+                    method="post"
+                >
+                    <button
+                        class="button button-dark button-full"
+                        type="submit"
+                    >
+                        Place order
+                    </button>
+                </form>
+
+                <p class="summary-note">
+                    MegaMart recalculates prices and totals on the server.
+                </p>
+
+            </aside>
+
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}

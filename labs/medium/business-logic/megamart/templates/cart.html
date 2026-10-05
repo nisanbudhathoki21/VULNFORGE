@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Cart — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+    <div class="container">
+
+        <span class="eyebrow">YOUR CART</span>
+
+        <div class="page-header-row">
+            <div>
+                <h1>Shopping cart</h1>
+                <p>Review your items before checkout.</p>
+            </div>
+
+            <a
+                class="button button-light"
+                href="{{ url_for("products") }}"
+            >
+                Continue shopping
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+<section class="section">
+    <div class="container">
+
+        {% if cart %}
+
+        <div class="cart-layout">
+
+            <div class="cart-items">
+
+                {% for item in cart %}
+
+                <article class="cart-item">
+
+                    <img
+                        class="cart-item-image"
+                        src="{{ item.product.image }}"
+                        alt="{{ item.product.name }}"
+                    >
+
+                    <div class="cart-item-info">
+
+                        <span class="eyebrow">
+                            {{ item.product.category }}
+                        </span>
+
+                        <h2>{{ item.product.name }}</h2>
+
+                        <p>
+                            Quantity: {{ item.quantity }}
+                        </p>
+
+                        <strong>
+                            ${{ "%.2f"|format(item.line_total) }}
+                        </strong>
+
+                    </div>
+
+                    <form
+                        action="{{ url_for("remove_from_cart", product_id=item.product.id) }}"
+                        method="post"
+                    >
+                        <button
+                            class="remove-button"
+                            type="submit"
+                        >
+                            Remove
+                        </button>
+                    </form>
+
+                </article>
+
+                {% endfor %}
+
+            </div>
+
+
+            <aside class="cart-summary">
+
+                <span class="card-label">ORDER SUMMARY</span>
+
+                <h2>Summary</h2>
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <strong>${{ "%.2f"|format(subtotal) }}</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <strong>${{ "%.2f"|format(shipping) }}</strong>
+                </div>
+
+                <div class="summary-row">
+                    <span>Tax</span>
+                    <strong>${{ "%.2f"|format(tax) }}</strong>
+                </div>
+
+                <div class="summary-total">
+                    <span>Total</span>
+                    <strong>${{ "%.2f"|format(total) }}</strong>
+                </div>
+
+                <a
+                    class="button button-dark button-full"
+                    href="{{ url_for("checkout") }}"
+                >
+                    Proceed to checkout
+                </a>
+
+                <p class="summary-note">
+                    Final pricing is calculated server-side.
+                </p>
+
+            </aside>
+
+        </div>
+
+        {% else %}
+
+        <div class="empty-state">
+
+            <span class="empty-icon">□</span>
+
+            <h2>Your cart is empty</h2>
+
+            <p>
+                Add something from the collection to get started.
+            </p>
+
+            <a
+                class="button button-dark"
+                href="{{ url_for("products") }}"
+            >
+                Browse products
+            </a>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+{% endblock %}

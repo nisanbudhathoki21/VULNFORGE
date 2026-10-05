@@ -18,6 +18,7 @@ def test_http_response_states_are_classified_as_live_evidence(status, expected):
 def test_transport_failures_do_not_become_false_endpoint_facts():
     assert classify_live_state(0, "ReadTimeout: request timed out") == "TIMEOUT"
     assert classify_live_state(0, "ConnectError: [Errno 111] Connection refused") == "DEAD"
+    assert classify_live_state(0, "ConnectError: All connection attempts failed") == "DEAD"
     assert classify_live_state(0, "RemoteProtocolError: malformed reply") == "UNKNOWN"
     assert classify_live_state(0, "crawl task cancelled") == "UNKNOWN"
 

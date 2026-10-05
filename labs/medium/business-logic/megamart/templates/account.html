@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Account — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+    <div class="container">
+
+        <span class="eyebrow">MY ACCOUNT</span>
+
+        <div class="page-header-row">
+            <div>
+                <h1>Your account</h1>
+                <p>Manage your profile and shopping preferences.</p>
+            </div>
+
+            <a
+                class="button button-light"
+                href="{{ url_for("signout") }}"
+            >
+                Sign out
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+<section class="section account-section">
+    <div class="container">
+
+        <div class="account-grid">
+
+            <div class="account-card">
+
+                <span class="card-label">ACCOUNT</span>
+
+                <h2>{{ current_user.name }}</h2>
+
+                <p class="account-email">
+                    {{ current_user.email }}
+                </p>
+
+                <div class="account-detail">
+                    <span>Role</span>
+                    <strong>{{ current_user.role }}</strong>
+                </div>
+
+            </div>
+
+
+            <div class="account-card">
+
+                <span class="card-label">SHIPPING PREFERENCE</span>
+
+                <h2>Delivery settings</h2>
+
+                <p>
+                    Choose the preferred delivery method for future orders.
+                </p>
+
+                <form
+                    class="settings-form"
+                    action="{{ url_for("shipping") }}"
+                    method="post"
+                >
+
+                    <label for="shipping_method">
+                        Shipping method
+                    </label>
+
+                    <select
+                        id="shipping_method"
+                        name="shipping_method"
+                        required
+                    >
+                        <option
+                            value="standard"
+                            {% if current_user.shipping_method == "standard" %}
+                            selected
+                            {% endif %}
+                        >
+                            Standard — 3 to 5 days
+                        </option>
+
+                        <option
+                            value="express"
+                            {% if current_user.shipping_method == "express" %}
+                            selected
+                            {% endif %}
+                        >
+                            Express — 1 to 2 days
+                        </option>
+                    </select>
+
+                    <button
+                        class="button button-dark"
+                        type="submit"
+                    >
+                        Save preference
+                    </button>
+
+                </form>
+
+                <div class="security-note">
+                    <strong>Training lab note</strong>
+                    <span>
+                        This state-changing request intentionally has no
+                        anti-CSRF token.
+                    </span>
+                </div>
+
+            </div>
+
+
+            <div class="account-card account-card-wide">
+
+                <span class="card-label">ORDERS</span>
+
+                <h2>Order history</h2>
+
+                <p>
+                    Review your previous MegaMart purchases.
+                </p>
+
+                <a
+                    class="button button-light"
+                    href="{{ url_for("orders") }}"
+                >
+                    View orders
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}

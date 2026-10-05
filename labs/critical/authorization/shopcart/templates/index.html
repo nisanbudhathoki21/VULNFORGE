@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+
+{% block title %}ShopCart — Everyday, Elevated{% endblock %}
+
+{% block content %}
+
+<!-- =====================================================
+     HERO
+     ===================================================== -->
+
+<section class="hero">
+
+    <div class="hero-media">
+        <img
+            src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=88"
+            alt="ShopCart contemporary clothing collection"
+            loading="eager"
+        >
+
+        <div class="hero-overlay"></div>
+    </div>
+
+    <div class="hero-content">
+
+        <span class="hero-kicker">
+            SHOPCART / FALL 2026
+        </span>
+
+        <h1>
+            Everyday,<br>
+            <em>elevated.</em>
+        </h1>
+
+        <p>
+            Contemporary essentials designed for
+            movement, comfort and modern living.
+        </p>
+
+        <div class="hero-actions">
+            <a
+                href="{{ url_for('products') }}"
+                class="hero-button hero-button-dark"
+            >
+                Shop collection
+                <span>→</span>
+            </a>
+
+            <a
+                href="{{ url_for('products') }}?category=Women"
+                class="hero-button hero-button-light"
+            >
+                Women's edit
+                <span>→</span>
+            </a>
+        </div>
+
+    </div>
+
+    <div class="hero-scroll">
+        <span></span>
+        Scroll to explore
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     CATEGORY STRIP
+     ===================================================== -->
+
+<section class="category-strip">
+
+    <a href="{{ url_for('products') }}?category=Men">
+        <span>01</span>
+        Men's collection
+        <strong>→</strong>
+    </a>
+
+    <a href="{{ url_for('products') }}?category=Women">
+        <span>02</span>
+        Women's collection
+        <strong>→</strong>
+    </a>
+
+    <a href="{{ url_for('products') }}?category=Unisex">
+        <span>03</span>
+        Unisex essentials
+        <strong>→</strong>
+    </a>
+
+    <a href="{{ url_for('products') }}?sort=new">
+        <span>04</span>
+        New arrivals
+        <strong>→</strong>
+    </a>
+
+</section>
+
+
+<!-- =====================================================
+     INTRO
+     ===================================================== -->
+
+<section class="editorial-intro">
+
+    <div class="editorial-label">
+        THE SHOPCART EDIT
+    </div>
+
+    <div class="editorial-copy">
+
+        <h2>
+            Less noise.<br>
+            <span>Better pieces.</span>
+        </h2>
+
+        <p>
+            We believe everyday clothing should feel effortless.
+            Clean silhouettes, considered materials and pieces
+            you will actually want to wear again tomorrow.
+        </p>
+
+        <a
+            href="{{ url_for('products') }}"
+            class="text-link"
+        >
+            Explore all products
+            <span>→</span>
+        </a>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     FEATURED PRODUCTS
+     ===================================================== -->
+
+<section class="featured-section">
+
+    <div class="section-heading">
+
+        <div>
+            <span class="section-kicker">
+                CURATED FOR YOU
+            </span>
+
+            <h2>
+                The essentials
+            </h2>
+        </div>
+
+        <a
+            href="{{ url_for('products') }}"
+            class="view-all"
+        >
+            View all
+            <span>→</span>
+        </a>
+
+    </div>
+
+
+    <div class="product-grid">
+
+        {% for product in products[:4] %}
+
+        <article class="product-card">
+
+            <a
+                href="{{ url_for('product', product_id=product.id) }}"
+                class="product-image-wrap"
+            >
+
+                {% if product.badge %}
+                    <span class="product-badge">
+                        {{ product.badge }}
+                    </span>
+                {% endif %}
+
+                <img
+                    src="{{ product.image }}"
+                    alt="{{ product.name }}"
+                    loading="lazy"
+                >
+
+                <span class="quick-view">
+                    View product
+                    <span>→</span>
+                </span>
+
+            </a>
+
+            <div class="product-info">
+
+                <div class="product-meta">
+
+                    <span class="product-category">
+                        {{ product.category }}
+                        / {{ product.subcategory }}
+                    </span>
+
+                    <span class="product-stock">
+                        {% if product.stock <= 5 %}
+                            Only {{ product.stock }} left
+                        {% else %}
+                            In stock
+                        {% endif %}
+                    </span>
+
+                </div>
+
+                <h3>
+                    <a
+                        href="{{ url_for('product', product_id=product.id) }}"
+                    >
+                        {{ product.name }}
+                    </a>
+                </h3>
+
+                <div class="rating">
+
+                    <span class="stars">
+                        {% for i in range(5) %}
+                            {% if i < product.rating|round(0, 'floor')|int %}
+                                ★
+                            {% else %}
+                                ☆
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+
+                    <span class="review-count">
+                        {{ product.rating }}
+                        ({{ product.reviews }})
+                    </span>
+
+                </div>
+
+                <div class="price-row">
+
+                    <span class="price">
+                        ${{ "%.0f"|format(product.price) }}
+                    </span>
+
+                    {% if product.compare_at %}
+                        <span class="compare-price">
+                            ${{ "%.0f"|format(product.compare_at) }}
+                        </span>
+
+                        <span class="discount">
+                            SALE
+                        </span>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </article>
+
+        {% endfor %}
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     EDITORIAL BANNER
+     ===================================================== -->
+
+<section class="editorial-banner">
+
+    <div class="editorial-banner-image">
+
+        <img
+            src="https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1800&q=88"
+            alt="ShopCart clothing collection"
+            loading="lazy"
+        >
+
+    </div>
+
+    <div class="editorial-banner-content">
+
+        <span class="section-kicker">
+            NEW SEASON
+        </span>
+
+        <h2>
+            Built for<br>
+            <em>every day.</em>
+        </h2>
+
+        <p>
+            From first coffee to last train.
+            Discover pieces designed to move with you.
+        </p>
+
+        <a
+            href="{{ url_for('products') }}?sort=new"
+            class="hero-button hero-button-dark"
+        >
+            Discover new arrivals
+            <span>→</span>
+        </a>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     ALL PRODUCTS MINI GRID
+     ===================================================== -->
+
+<section class="featured-section secondary-products">
+
+    <div class="section-heading">
+
+        <div>
+            <span class="section-kicker">
+                JUST DROPPED
+            </span>
+
+            <h2>
+                New arrivals
+            </h2>
+        </div>
+
+        <a
+            href="{{ url_for('products') }}?sort=new"
+            class="view-all"
+        >
+            Shop new
+            <span>→</span>
+        </a>
+
+    </div>
+
+    <div class="product-grid">
+
+        {% for product in products[4:8] %}
+
+        <article class="product-card">
+
+            <a
+                href="{{ url_for('product', product_id=product.id) }}"
+                class="product-image-wrap"
+            >
+
+                {% if product.badge %}
+                    <span class="product-badge">
+                        {{ product.badge }}
+                    </span>
+                {% endif %}
+
+                <img
+                    src="{{ product.image }}"
+                    alt="{{ product.name }}"
+                    loading="lazy"
+                >
+
+                <span class="quick-view">
+                    View product
+                    <span>→</span>
+                </span>
+
+            </a>
+
+            <div class="product-info">
+
+                <div class="product-meta">
+
+                    <span class="product-category">
+                        {{ product.category }}
+                    </span>
+
+                    <span class="product-stock">
+                        {% if product.stock <= 5 %}
+                            Low stock
+                        {% else %}
+                            In stock
+                        {% endif %}
+                    </span>
+
+                </div>
+
+                <h3>
+                    <a
+                        href="{{ url_for('product', product_id=product.id) }}"
+                    >
+                        {{ product.name }}
+                    </a>
+                </h3>
+
+                <div class="rating">
+
+                    <span class="stars">
+                        {% for i in range(5) %}
+                            {% if i < product.rating|round(0, 'floor')|int %}
+                                ★
+                            {% else %}
+                                ☆
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+
+                    <span class="review-count">
+                        {{ product.rating }}
+                        ({{ product.reviews }})
+                    </span>
+
+                </div>
+
+                <div class="price-row">
+
+                    <span class="price">
+                        ${{ "%.0f"|format(product.price) }}
+                    </span>
+
+                    {% if product.compare_at %}
+                        <span class="compare-price">
+                            ${{ "%.0f"|format(product.compare_at) }}
+                        </span>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </article>
+
+        {% endfor %}
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     BRAND STATEMENT
+     ===================================================== -->
+
+<section class="brand-statement">
+
+    <span class="section-kicker">
+        OUR APPROACH
+    </span>
+
+    <h2>
+        Good clothes don't<br>
+        need to shout.
+    </h2>
+
+    <p>
+        Thoughtful design. Better materials.
+        Pieces made to stay in your rotation.
+    </p>
+
+    <a
+        href="{{ url_for('products') }}"
+        class="text-link"
+    >
+        Shop ShopCart
+        <span>→</span>
+    </a>
+
+</section>
+
+
+<!-- =====================================================
+     SERVICE STRIP
+     ===================================================== -->
+
+<section class="service-strip" id="shipping">
+
+    <div>
+        <span class="service-icon">01</span>
+        <strong>Fast shipping</strong>
+        <p>Free over $100</p>
+    </div>
+
+    <div>
+        <span class="service-icon">02</span>
+        <strong>Easy returns</strong>
+        <p>30-day return window</p>
+    </div>
+
+    <div>
+        <span class="service-icon">03</span>
+        <strong>Secure checkout</strong>
+        <p>Your information stays protected</p>
+    </div>
+
+    <div>
+        <span class="service-icon">04</span>
+        <strong>Designed to last</strong>
+        <p>Everyday quality essentials</p>
+    </div>
+
+</section>
+
+{% endblock %}

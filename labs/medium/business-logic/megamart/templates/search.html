@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Search — MegaMart{% endblock %}
+
+{% block content %}
+
+<section class="page-header search-header">
+    <div class="container">
+
+        <span class="eyebrow">MEGAMART SEARCH</span>
+
+        <h1>Results for: {{ query|safe }}</h1>
+
+        <form
+            class="search-large"
+            action="{{ url_for("search") }}"
+            method="get"
+        >
+            <input
+                type="search"
+                name="q"
+                value="{{ query }}"
+                placeholder="Search products..."
+                autocomplete="off"
+            >
+
+            <button
+                class="button button-dark"
+                type="submit"
+            >
+                Search
+            </button>
+        </form>
+
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+
+        {% if results %}
+
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">MATCHES</span>
+                <h2>{{ results|length }} products found</h2>
+            </div>
+        </div>
+
+        <div class="product-grid">
+
+            {% for product in results %}
+
+            <article class="product-card">
+
+                <a
+                    class="product-image"
+                    href="{{ url_for("product", product_id=product.id) }}"
+                >
+                    <img
+                        src="{{ product.image }}"
+                        alt="{{ product.name }}"
+                        loading="lazy"
+                    >
+                </a>
+
+                <div class="product-info">
+
+                    <div class="product-meta">
+                        <span>{{ product.category }}</span>
+                    </div>
+
+                    <a
+                        class="product-name"
+                        href="{{ url_for("product", product_id=product.id) }}"
+                    >
+                        {{ product.name }}
+                    </a>
+
+                    <div class="product-bottom">
+                        <span class="product-price">
+                            ${{ "%.2f"|format(product.price) }}
+                        </span>
+
+                        <span class="product-arrow">↗</span>
+                    </div>
+
+                </div>
+
+            </article>
+
+            {% endfor %}
+
+        </div>
+
+        {% else %}
+
+        <div class="empty-state">
+
+            <span class="empty-icon">⌕</span>
+
+            <h2>No products found</h2>
+
+            <p>
+                Try another search term or browse the complete collection.
+            </p>
+
+            <a
+                class="button button-dark"
+                href="{{ url_for("products") }}"
+            >
+                Browse products
+            </a>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+{% endblock %}

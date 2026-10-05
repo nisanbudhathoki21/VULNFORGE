@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Bag — QuickCart{% endblock %}
+
+{% block content %}
+<section class="section narrow">
+    <p class="eyebrow">SHOPPING BAG</p>
+    <h1>Your bag</h1>
+
+    {% for line in summary.lines %}
+    <div class="cart-line">
+        <div>
+            <strong>{{ line.product.name }}</strong>
+            <p>${{ "%.2f"|format(line.price) }} × {{ line.quantity }}</p>
+        </div>
+        <strong>${{ "%.2f"|format(line.total) }}</strong>
+    </div>
+    {% else %}
+    <p>Your bag is empty.</p>
+    {% endfor %}
+
+    {% if summary.lines %}
+    <div class="totals">
+        <p>Subtotal <strong>${{ "%.2f"|format(summary.subtotal) }}</strong></p>
+        <p>Discount <strong>-${{ "%.2f"|format(summary.discount) }}</strong></p>
+        <p>Shipping <strong>${{ "%.2f"|format(summary.shipping) }}</strong></p>
+        <p>Tax <strong>${{ "%.2f"|format(summary.tax) }}</strong></p>
+        <h2>Total ${{ "%.2f"|format(summary.total) }}</h2>
+    </div>
+
+    {% if current_user %}
+        <a class="button" href="{{ url_for('checkout') }}">Checkout</a>
+    {% else %}
+        <a class="button" href="{{ url_for('signin') }}">Sign in to checkout</a>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}
