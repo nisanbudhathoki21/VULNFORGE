@@ -359,171 +359,266 @@ def _authorized(auth, yes, host, local, *, quiet=False, json_output=False):
 
 
 def _summary(result, files, report_path=None, *, detailed=False, quiet=False):
+    """Render a professional terminal summary from the current scan context."""
+    from collections import Counter
+
+    from .core.outcomes import (
+        RESULT_STATES,
+        finding_result_status,
+        test_result_status,
+    )
     from .core.redaction import redact_text, redact_url_query_values
     from .cli_ui import _terminal_safe
-    safe_text=lambda value: _terminal_safe(redact_text(value))
-    c=result.context; intel=getattr(c,"intelligence",{}); target=intel.get("target",{})
-    target_display=_terminal_safe(redact_url_query_values(target.get('final_url',c.config.target)))
-    dns=intel.get("dns",{}); techs=list(c.technologies.values())
-    categories={}
-    for tech in techs: categories.setdefault(tech.category,[]).append(tech.name)
-    verified=list(getattr(c,"verified_findings",[]))
-    if not verified: verified=[f for f in c.findings if f.status=="VERIFIED"]
-    candidates=[f for f in c.findings if f.status!="VERIFIED"]
+
+    context = result.context
+    intelligence = getattr(context, "intelligence", {}) or {}
+    target_data = intelligence.get("target", {}) or {}
+
+    target = _terminal_safe(
+        redact_url_query_values(
+            target_data.get("final_url") or context.config.target
+        )
+    )
+
+    findings = list(getattr(context, "findings", []))
+    tests = list(getattr(context, "tests", []))
+
+    # Findings and executed tests are deliberately classified separately.
+    # A verified test must never be counted as a second vulnerability.
+    finding_counts = Counter(
+        finding_result_status(finding.to_dict())
+        for finding in findings
+    )
+
+    test_counts = Counter(
+        test_result_status(test)
+        for test in tests
+    )
+
+    state = (
+        "STOPPED"
+        if result.aborted
+        else "LIMITED"
+        if getattr(context, "stop_reason", "")
+        else "COMPLETE"
+    )
+
+    def clean(value):
+        return _terminal_safe(redact_text(str(value)))
+
+    def section(title):
+        print()
+        print(title)
+        print("─" * max(24, min(40, len(title) + 4)))
+
+    def existing_reports():
+        return [
+            (kind, path)
+            for kind, path in files.items()
+            if path and Path(path).is_file()
+        ]
+
+    # Quiet mode intentionally reports vulnerability findings only.
     if quiet:
-        state="STOPPED" if result.aborted else ("LIMITED" if c.stop_reason else "COMPLETE")
         print(f"VULNFORGE · SCAN {state}")
-        print(f"Target: {target_display}")
-        print(f"Confirmed findings: {len(verified)}")
-        for finding in verified[:10]:
-            print(f"  {finding.severity.upper()} · {safe_text(finding.title)}")
-        report_dir=str(Path(next(iter(files.values()))).parent) if files else "Not generated"
-        print(f"Reports: {report_dir}")
-        print(f"Scan ID: {c.scan_id}")
+        print(f"Target      {target}")
+        print(f"Scan ID     {context.scan_id}")
+        print(f"Confirmed   {finding_counts.get('CONFIRMED', 0)}")
+
+        print("Reports")
+        for kind, path in existing_reports():
+            print(f"  {kind.upper():5} {path}")
         return
-    if not detailed:
-        from collections import Counter
-        from .core.outcomes import finding_result_status, test_result_status
-        from .core.redaction import redact_url_query_values
-        finding_states=Counter(finding_result_status(f.to_dict()) for f in c.findings)
-        test_states=Counter(test_result_status(t) for t in c.tests if str(t.get("status","")).upper()!="VERIFIED")
-        combined_states=Counter(finding_states)
-        for k,v in test_states.items():
-            combined_states[k]+=v
-        selected=[row for row in getattr(c,"vulnerability_matrix",[]) if row.get("selected")]
-        supported=sum(1 for row in selected if row.get("supported"))
-        unsupported=sum(1 for row in selected if not row.get("supported"))
-        request_budget=getattr(getattr(c.requester,"budget",None),"max_requests",None)
-        state="STOPPED" if result.aborted else ("LIMITED" if c.stop_reason else "COMPLETE")
-        print(f"\nVULNFORGE · SCAN {state}")
-        print(f"Target: {target_display}")
-        print(f"HTTP requests: {c.stats.requests_sent}" + (f"/{request_budget}" if request_budget else "") +
-              f" · endpoints: {len(c.endpoints)} · parameters: {len(c.parameters)}")
-        frontend=[n for k in ("frontend","js-framework","build-tool") for n in categories.get(k,[])]
-        backend=[n for k in ("framework","language","runtime") for n in categories.get(k,[])]
-        edge=[n for k in ("cdn","waf") for n in categories.get(k,[])]
-        server_names=categories.get("server",[])
-        print("FINGERPRINTS (observed)")
-        print(f"  Host / IPs : {target.get('hostname','Unknown')} · {', '.join(dns.get('observed_addresses',[])) or 'IP not resolved/observed'}")
-        print(f"  Edge / WAF : {', '.join(edge) if edge else 'No matching passive signature observed'}")
-        print(f"  Frontend   : {', '.join(frontend) if frontend else 'Not identified from observed pages/assets'}")
-        print(f"  Backend    : {', '.join(backend) if backend else 'Not identified from observed responses'}")
-        print(f"  Web server : {', '.join(server_names) if server_names else 'Not identified from response headers'}")
-        configured_rate=getattr(c.config,"request_rate",None)
-        configured_budget=getattr(c.config,"request_budget",request_budget)
-        observed_exchanges=getattr(getattr(c,"requester",None),"exchanges",[])
-        throttled=sum(1 for exchange in observed_exchanges if getattr(exchange,"status",0)==429)
-        retry_after=sum(1 for exchange in observed_exchanges if any(str(k).lower()=="retry-after" for k in getattr(exchange,"response_headers",{})))
-        rate_text=f"{configured_rate:g} req/s max" if isinstance(configured_rate,(int,float)) else "profile default"
-        print(f"  Scan pace  : {rate_text} · budget {configured_budget or 'profile default'} · target 429s {throttled}, Retry-After on {retry_after} response(s)")
-        print(f"Testing: {len(c.tests)} executed · {len(c.hypotheses)} hypotheses · {supported} supported class(es) selected · {unsupported} unsupported")
-        print("Results: " + " · ".join(f"{name} {combined_states.get(name,0)}" for name in
-              ("CONFIRMED","UNCONFIRMED","KILLED","UNTESTABLE","SKIPPED","UNSUPPORTED","INFORMATIONAL")))
-        for finding in verified[:10]:
-            print(f"  CONFIRMED · {finding.severity.upper()} · {safe_text(finding.title)}")
-        if not quiet:
-            ordered_tests=sorted(
-                [t for t in c.tests if str(t.get("status","")).upper()!="VERIFIED"],
-                key=lambda t:(0 if t.get("reproduction_status")=="REPRODUCED" else 1, str(t.get("type","")))
+
+    # ------------------------------------------------------------------
+    # DISCOVERY
+    # ------------------------------------------------------------------
+    section("DISCOVERY")
+    print(f"Endpoints     {len(getattr(context, 'endpoints', {}))}")
+    print(f"Parameters    {len(getattr(context, 'parameters', {}))}")
+    print(f"Requests      {getattr(context.stats, 'requests_sent', 0)}")
+
+    # ------------------------------------------------------------------
+    # FINGERPRINTS
+    # ------------------------------------------------------------------
+    section("FINGERPRINTS")
+
+    technologies = list(getattr(context, "technologies", {}).values())
+    categories = {}
+
+    for technology in technologies:
+        categories.setdefault(
+            str(technology.category).lower(),
+            [],
+        ).append(technology.name)
+
+    def tech_names(names):
+        values = []
+
+        for name in names:
+            values.extend(categories.get(name, []))
+
+        return ", ".join(values) if values else "Not identified"
+
+    print(f"Web Server    {tech_names(['server'])}")
+    print(
+        f"Backend       "
+        f"{tech_names(['framework', 'language', 'runtime'])}"
+    )
+    print(
+        f"Frontend      "
+        f"{tech_names(['frontend', 'js-framework', 'build-tool'])}"
+    )
+    print(
+        f"WAF           "
+        f"{tech_names(['waf']) if categories.get('waf') else 'No matching signature observed'}"
+    )
+
+    # ------------------------------------------------------------------
+    # ASSESSMENT
+    # ------------------------------------------------------------------
+    section("ASSESSMENT")
+    print(f"Hypotheses     {len(getattr(context, 'hypotheses', []))}")
+    print(f"Tests          {len(tests)}")
+
+    # ------------------------------------------------------------------
+    # FINDING RESULTS
+    # ------------------------------------------------------------------
+    section("FINDING RESULTS")
+
+    for status in RESULT_STATES:
+        print(
+            f"{status:<14} "
+            f"{finding_counts.get(status, 0)}"
+        )
+
+    # ------------------------------------------------------------------
+    # TEST EXECUTION
+    # ------------------------------------------------------------------
+    section("TEST EXECUTION")
+    print(f"Executed       {len(tests)}")
+    print(f"Confirmed      {test_counts.get('CONFIRMED', 0)}")
+    print(f"Unconfirmed    {test_counts.get('UNCONFIRMED', 0)}")
+    print(f"Killed         {test_counts.get('KILLED', 0)}")
+    print(f"Untestable     {test_counts.get('UNTESTABLE', 0)}")
+    print(f"Skipped        {test_counts.get('SKIPPED', 0)}")
+    print(f"Unsupported    {test_counts.get('UNSUPPORTED', 0)}")
+
+    # ------------------------------------------------------------------
+    # CONFIRMED FINDINGS
+    # ------------------------------------------------------------------
+    confirmed = [
+        finding
+        for finding in findings
+        if finding_result_status(finding.to_dict()) == "CONFIRMED"
+    ]
+
+    if confirmed:
+        section("CONFIRMED FINDINGS")
+
+        for finding in confirmed:
+            print(
+                f"[{str(finding.severity).upper()}] "
+                f"{clean(finding.title)}"
             )
-            for item in ordered_tests[:8]:
-                t_state=test_result_status(item)
-                repro="REPRODUCED · " if item.get("reproduction_status")=="REPRODUCED" else ""
-                t_name=str(item.get("type","test")).replace("-"," ").title()
-                ep=str(item.get("endpoint",""))
-                if ep:
-                    safe_ep=redact_url_query_values(ep)
-                    parts=urlsplit(safe_ep)
-                    ep=(parts.hostname or "")+(parts.path or "/")
-                    if parts.query: ep+="?"+parts.query
-                ep_text=f" · {ep[:80]}" if ep else ""
-                print(f"  {t_state} · {repro}{t_name}{ep_text}")
-            ordered_candidates=sorted(
-                candidates,
-                key=lambda f:(1 if finding_result_status(f.to_dict())=="INFORMATIONAL" else 0, f.title)
+            print(
+                f"Endpoint   "
+                f"{clean(getattr(finding, 'endpoint', '') or 'Not recorded')}"
             )
-            for finding in ordered_candidates[:8]:
-                print(f"  {finding_result_status(finding.to_dict())} · {safe_text(finding.title)}")
-            print("Reports: " + ", ".join(files.values()))
+            print(
+                f"Method     "
+                f"{clean(getattr(finding, 'method', '') or 'Not recorded')}"
+            )
+            print(
+                f"Parameter  "
+                f"{clean(getattr(finding, 'parameter', '') or 'Not recorded')}"
+            )
+            print("Status     CONFIRMED")
+            print(
+                f"Confidence "
+                f"{getattr(finding, 'confidence', 0):.0%}"
+            )
+
+    # ------------------------------------------------------------------
+    # UNCONFIRMED
+    # ------------------------------------------------------------------
+    unconfirmed = [
+        finding
+        for finding in findings
+        if finding_result_status(finding.to_dict()) == "UNCONFIRMED"
+    ]
+
+    unconfirmed += [
+        test
+        for test in tests
+        if test_result_status(test) == "UNCONFIRMED"
+    ]
+
+    labels = []
+
+    for item in unconfirmed:
+        if isinstance(item, dict):
+            label = item.get("type", "hypothesis")
         else:
-            print("Reports: " + files.get("json", "reports not generated"))
-        print(f"Scan ID: {c.scan_id}")
-        return
-    print("\n"+"═"*66)
-    print("SCAN STOPPED" if result.aborted else ("SCAN COMPLETE · LIMITED" if c.stop_reason else "SCAN COMPLETE"))
-    print("TARGET")
-    print(f"  {target_display}")
-    print(f"  Host {target.get('hostname','Not identified')} · {target.get('scheme','Not determined').upper()} · port {target.get('port','Not determined')}")
-    service_statuses=sorted({str(s.get('status')) for s in intel.get('services',[]) if s.get('status') is not None})
-    print(f"  IPs: {', '.join(dns.get('observed_addresses',[])) or 'Not identified'} · redirects: {len(intel.get('redirects',[]))} observed · HTTP status: {', '.join(service_statuses) or 'No response observed'}")
-    print("NETWORK & INFRASTRUCTURE")
-    print(f"  CDN/WAF : {', '.join(categories.get('cdn',[])+categories.get('waf',[])) or 'Not identified'}")
-    print(f"  Server  : {', '.join(categories.get('server',[])) or 'Not identified'}")
-    print(f"  TLS     : {intel.get('tls',{}).get('status','NOT DETERMINED')}")
-    print("TECHNOLOGY")
-    for label,keys in (("Frontend",("frontend","js-framework","build-tool")),("Backend",("framework","language")),("Runtime",("runtime",)),("CMS",("cms",))):
-        vals=[name for key in keys for name in categories.get(key,[])]
-        print(f"  {label:10}: {', '.join(vals) if vals else 'Not identified'}")
-    print("  Database  : Not determined")
-    print("SECURITY")
-    print(f"  Authentication : {intel.get('authentication',{}).get('status','NOT DETERMINED')} · MFA {intel.get('mfa',{}).get('status','NOT DETERMINED')}")
-    print(f"  Cookies        : {len(intel.get('cookies',[]))} names observed")
-    headers=intel.get('security_headers',{})
-    print(f"  Header controls: {sum(1 for x in headers.values() if x['observed'] and not x['missing'])}/{len(headers)} fully present across observed responses")
-    for label,test_type in (("CORS","cors-origin-reflection"),("SQLi","sql-injection-validation")):
-        records=[item for item in c.tests if item.get("type")==test_type]
-        if records:
-            from .core.outcomes import test_result_status
-            states=", ".join(f"{state}: {sum(1 for item in records if test_result_status(item)==state)}"
-                              for state in ("CONFIRMED","UNCONFIRMED","KILLED","UNTESTABLE","SKIPPED")
-                              if any(test_result_status(item)==state for item in records))
-            print(f"  {label:14}: {states or 'executed; see report'}")
-        else:
-            state="not run (passive mode)" if not c.config.active_requested else "no eligible observed surface"
-            print(f"  {label:14}: {state}")
-    print("APPLICATION")
-    print(f"  Endpoints {len(c.endpoints)} · Parameters {len(c.parameters)} · APIs {sum(intel.get('api',{}).get('inventory_counts',{}).values())} · Forms {sum(1 for e in c.endpoints.values() if e.source=='form')} · JS {intel.get('coverage',{}).get('javascript_discovered',0)} discovered/{c.js_analyzed} analyzed")
-    print("HYPOTHESES & VERIFICATION")
-    print(f"  Hypotheses {len(c.hypotheses)} · Tests {len(c.tests)} · Candidates {len(candidates)} · Confirmed {len(verified)}")
-    if c.tests:
-        from .core.redaction import redact_url_query_values
-        print("TEST RESULTS")
-        for item in c.tests:
-            test_type=str(item.get("type","test")).replace("-"," ").title()
-            endpoint=str(item.get("endpoint", ""))
-            if endpoint:
-                safe_url=redact_url_query_values(endpoint)
-                parts=urlsplit(safe_url)
-                endpoint=(parts.hostname or "")+(parts.path or "/")
-                if parts.query: endpoint+="?"+parts.query
-            detail=(" · "+endpoint[:96]) if endpoint else ""
-            if item.get("parameter"): detail+=f" · parameter {item['parameter']}"
-            from .core.outcomes import test_result_status
-            print(f"  {test_result_status(item):12} {test_type}{detail}")
-    for f in verified:
-        print(f"  [CONFIRMED] {f.title} · {f.severity.upper()} · evidence {len(f.evidence)} item(s)")
-    for f in candidates[:20]:
-        from .core.outcomes import finding_result_status
-        result_state=finding_result_status(f.to_dict())
-        print(f"  [{result_state}] {f.title} · {f.severity.upper()}")
-    print("REQUEST CONTROL")
-    lim=getattr(c.requester,"limiter",None); budget=getattr(c.requester,"budget",None)
-    print(f"  Used {c.stats.requests_sent}/{budget.max_requests if budget else '?'} · rate cap {c.config.request_rate if c.config.request_rate is not None else 'profile default'}/s")
-    if c.stop_reason:
-        print(f"  Network stop: {c.stop_reason} · offline analysis continued where possible")
-    if c.stats.crawl_cancelled or c.stats.crawl_errors:
-        print(f"  Crawler: {c.stats.crawl_errors} errors · {c.stats.crawl_cancelled} cancelled · {c.stats.crawl_timeouts} timeouts")
-    print("PHASE COVERAGE")
-    for phase in getattr(c,"phases",[]):
-        print(f"  {phase.phase_id} {phase.status:10} {phase.name}")
-    from .core.coverage import build_coverage
-    cov=build_coverage(c)
-    counts={s:sum(1 for x in cov if x['status']==s) for s in ("TESTED","PARTIAL","NOT_TESTED","UNSUPPORTED","BLOCKED")}
-    print("  " + " · ".join(f"{k}: {v}" for k,v in counts.items() if v))
-    print("REPORTS")
-    for kind,path in files.items(): print(f"  {kind.upper():5} {path}")
-    print(f"  Scan ID: {c.scan_id}")
-    print("═"*66)
+            label = getattr(item, "title", "hypothesis")
+
+        label = clean(
+            str(label).replace("-", " ").title()
+        )
+
+        if label not in labels:
+            labels.append(label)
+
+    if labels:
+        section("UNCONFIRMED")
+
+        for label in labels:
+            print(f"• {label}")
+
+        print(
+            "No unverified hypothesis was promoted "
+            "to a confirmed finding."
+        )
+
+    # ------------------------------------------------------------------
+    # FINAL SUMMARY
+    # ------------------------------------------------------------------
+    print()
+    print("VULNFORGE · SCAN COMPLETE")
+    print("─" * 40)
+    print(f"Target       {target}")
+    print(f"Scan ID      {context.scan_id}")
+    print()
+    print(
+        f"Requests     "
+        f"{getattr(context.stats, 'requests_sent', 0)}"
+    )
+    print(
+        f"Endpoints    "
+        f"{len(getattr(context, 'endpoints', {}))}"
+    )
+    print(
+        f"Parameters   "
+        f"{len(getattr(context, 'parameters', {}))}"
+    )
+    print()
+    print(
+        f"Confirmed     "
+        f"{finding_counts.get('CONFIRMED', 0)}"
+    )
+    print(
+        f"Unconfirmed   "
+        f"{finding_counts.get('UNCONFIRMED', 0)}"
+    )
+    print(
+        f"Informational "
+        f"{finding_counts.get('INFORMATIONAL', 0)}"
+    )
+    print()
+    print("Reports")
+
+    for kind, path in existing_reports():
+        print(f"  {kind.upper():5} {path}")
 
 def cmd_scan(args):
     # Fall back to env vars for local credential/scope file paths so a real
@@ -682,17 +777,19 @@ def cmd_scan(args):
     store.start_scan_record(cfg.scan_id,target,profile_name,scan_started)
     store.record_event(cfg.scan_id,{"kind":"scan-started","message":"Authorized scan accepted by the CLI.",
         "timestamp":scan_started,"data":{"scan_id":cfg.scan_id,"target":target,"status":"running"}})
-    from .cli_ui import LiveScanDashboard, print_banner
-    live_ui=None
+    from .cli_ui import print_banner, _terminal_safe
+    live_ui = None
+
     if not args.quiet and not args.json_output:
-        live_ui=LiveScanDashboard(
-            target,
-            mode=args.mode or "ASSESSMENT",
-            profile=profile_name,
-            color=(not args.no_color and sys.stdout.isatty()),
-        )
-        if live_ui.tty:
-            live_ui.draw()
+        # Normal scans use one clean header and one final organized summary.
+        # Detailed stage progress remains available with --verbose.
+        print_banner(color=(not args.no_color and sys.stdout.isatty()))
+        print("VULNFORGE · SECURITY ASSESSMENT")
+        print(f"Target      {_terminal_safe(target)}")
+        print(f"Profile     {test_profile}")
+        print(f"Scan ID     {cfg.scan_id}")
+        print("─" * 40)
+
     def stop(_sig,_frm):
         auth.stop("emergency stop / SIGINT")
         print("\nStopping VULNFORGE; collected state will be persisted.",file=sys.stderr if args.json_output else sys.stdout)

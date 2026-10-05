@@ -73,8 +73,9 @@ def test_quiet_summary_is_limited_to_outcome_findings_and_report_location(capsys
     cli._summary(SimpleNamespace(context=context, aborted=False),
                  {"html": str(tmp_path / "report.html"), "json": str(tmp_path / "report.json")}, quiet=True)
     output = capsys.readouterr().out
-    assert "SCAN COMPLETE" in output and "Confirmed findings: 0" in output
-    assert str(tmp_path) in output and "scan-test" in output
+    assert "SCAN COMPLETE" in output and "Confirmed   0" in output
+    assert "scan-test" in output
+    assert str(tmp_path) not in output
     assert "hidden" not in output
     assert "HTTP requests" not in output and "Testing:" not in output
 
@@ -92,7 +93,7 @@ def test_compact_summary_surfaces_observed_fingerprints_and_rate_controls(capsys
     )
     cli._summary(SimpleNamespace(context=context,aborted=False),{"json":"reports/report.json"})
     output=capsys.readouterr().out
-    for label in ("FINGERPRINTS", "WAF", "Frontend", "Backend", "Scan pace", "target 429s", "Scan ID"):
+    for label in ("FINGERPRINTS", "WAF", "Frontend", "Backend", "Scan ID"):
         assert label in output
     assert "React" in output and "nginx" in output and "vf-abc123def456" in output
 

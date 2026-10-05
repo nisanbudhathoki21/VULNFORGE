@@ -338,8 +338,6 @@ class Store:
     def save_scan(self, scan) -> None:
         """scan is engine.orchestrator.ScanResult (kept duck-typed)."""
         ctx = scan.context
-        from ..report.json_report import build_report_dict
-        report_doc = build_report_dict(scan)
         with self._conn() as con:
             # Remove only this scan's replaceable projections. Audit events are
             # intentionally retained as the durable activity trail.
@@ -391,15 +389,34 @@ class Store:
             endpoint_ids = {}
             tests_for_state = list(getattr(ctx, "tests", []) or [])
             findings_for_state = list(getattr(ctx, "findings", []) or [])
+
+            def _field(item, name, default=None):
+                if isinstance(item, dict):
+                    return item.get(name, default)
+                return getattr(item, name, default)
+
+            def _status(item):
+                return str(_field(item, "status", "") or "").upper()
+
+            def _endpoint(item):
+                return str(_field(item, "endpoint", "") or "")
+
             def _matches(value, endpoint):
                 text = str(value or "")
                 return text and (text == endpoint.url or text == endpoint.path or endpoint.path in text or endpoint.url in text)
             for ep in ctx.endpoints.values():
                 matching_tests = [item for item in tests_for_state if isinstance(item, dict) and _matches(item.get("endpoint"), ep)]
-                matching_findings = [item for item in findings_for_state if _matches(getattr(item, "endpoint", ""), ep)]
+                matching_findings = [
+                    item
+                    for item in findings_for_state
+                    if _matches(_endpoint(item), ep)
+                ]
                 if ep.scope_status == "OUT_OF_SCOPE":
                     ep.state, ep.state_reason = "UNTESTABLE", "Endpoint was discovered but excluded by the active scope policy."
-                elif any(str(getattr(item, "status", "")).upper() in {"VERIFIED", "CONFIRMED"} for item in matching_findings):
+                elif any(
+                    _status(item) in {"VERIFIED", "CONFIRMED"}
+                    for item in matching_findings
+                ):
                     ep.state, ep.state_reason = "CONFIRMED_VULNERABILITY", "A persisted finding reached the confirmed/verified state for this endpoint."
                 elif matching_tests:
                     ep.state, ep.state_reason = "TESTED", "At least one bounded test record is linked to this endpoint."
@@ -542,8 +559,236 @@ class Store:
                                 (ctx.scan_id, observed_hostname, typ, val, "system resolver"))
                     host_id = stable_id("host", f"{ctx.scan_id}:{observed_hostname}:{val}")
                     con.execute("INSERT OR REPLACE INTO hosts(host_id,target_id,scan_id,hostname,ip_address,source,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?)", (host_id, target_id, ctx.scan_id, observed_hostname, val, "dns", now, now))
-            con.execute("INSERT INTO scan_documents(scan_id,report_json) VALUES (?,?)",
-                        (ctx.scan_id, json.dumps(redact_any(report_doc))))
+            # ----------------------------------------------------------
+            # FINAL REPORT GENERATION
+            #
+            # This MUST happen after:
+            #   findings
+            #   tests
+            #   test runs
+            #   requests/responses
+            #   evidence
+            #   differential records
+            #   evidence -> request/response/diff links
+            #
+            # SQLite is the canonical persisted source of truth.
+            # ----------------------------------------------------------
+
+            from ..report.json_report import build_report_dict
+
+            report_doc = build_report_dict(scan)
+
+            # Build an integrity manifest from the persisted relational
+            # database, not merely from in-memory context.
+            db_hypotheses = int(
+                con.execute(
+                    "SELECT COUNT(*) FROM hypotheses WHERE scan_id=?",
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            db_tests = int(
+                con.execute(
+                    "SELECT COUNT(*) FROM tests WHERE scan_id=?",
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            db_test_runs = int(
+                con.execute(
+                    "SELECT COUNT(*) FROM test_runs WHERE scan_id=?",
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            db_findings = int(
+                con.execute(
+                    "SELECT COUNT(*) FROM findings WHERE scan_id=?",
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            db_confirmed_findings = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM findings
+                    WHERE scan_id=?
+                      AND UPPER(status) IN ('VERIFIED','CONFIRMED')
+                    """,
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            db_candidates = db_findings - db_confirmed_findings
+
+            db_evidence = int(
+                con.execute(
+                    "SELECT COUNT(*) FROM evidence WHERE scan_id=?",
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            integrity_errors = []
+
+            # Confirmed findings MUST have evidence.
+            confirmed_without_evidence = con.execute(
+                """
+                SELECT f.finding_id
+                FROM findings f
+                LEFT JOIN evidence e
+                    ON e.scan_id=f.scan_id
+                   AND e.finding_id=f.finding_id
+                WHERE f.scan_id=?
+                  AND UPPER(f.status) IN ('VERIFIED','CONFIRMED')
+                GROUP BY f.finding_id
+                HAVING COUNT(e.evidence_id)=0
+                """,
+                (ctx.scan_id,),
+            ).fetchall()
+
+            for row in confirmed_without_evidence:
+                integrity_errors.append(
+                    f"confirmed finding {row['finding_id']} has no evidence"
+                )
+
+            # Every evidence row should point to a real finding.
+            orphan_evidence = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM evidence e
+                    LEFT JOIN findings f
+                      ON f.scan_id=e.scan_id
+                     AND f.finding_id=e.finding_id
+                    WHERE e.scan_id=?
+                      AND f.finding_id IS NULL
+                    """,
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            if orphan_evidence:
+                integrity_errors.append(
+                    f"{orphan_evidence} evidence rows reference missing findings"
+                )
+
+            # Every evidence row with a test_id should point to a test.
+            orphan_test_evidence = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM evidence e
+                    LEFT JOIN tests t
+                      ON t.scan_id=e.scan_id
+                     AND t.test_id=e.test_id
+                    WHERE e.scan_id=?
+                      AND e.test_id IS NOT NULL
+                      AND e.test_id != ''
+                      AND t.test_id IS NULL
+                    """,
+                    (ctx.scan_id,),
+                ).fetchone()[0]
+            )
+
+            if orphan_test_evidence:
+                integrity_errors.append(
+                    f"{orphan_test_evidence} evidence rows reference missing tests"
+                )
+
+            # Report-level integrity contract.
+            report_doc["finding_summary"] = {
+                "total_records": db_findings,
+                "confirmed": db_confirmed_findings,
+                "verified": db_confirmed_findings,
+                "candidates": db_candidates,
+            }
+
+            report_doc["integrity"] = {
+                "database_source_of_truth": True,
+                "validated": not integrity_errors,
+                "hypotheses": db_hypotheses,
+                "tests": db_tests,
+                "test_runs": db_test_runs,
+                "findings_total": db_findings,
+                "confirmed_findings": db_confirmed_findings,
+                "candidates": db_candidates,
+                "evidence": db_evidence,
+                "integrity_errors": integrity_errors,
+            }
+
+            # Add persisted evidence as a first-class report section.
+            evidence_rows = con.execute(
+                """
+                SELECT
+                    evidence_id,
+                    finding_id,
+                    test_id,
+                    request_id,
+                    response_id,
+                    diff_id,
+                    data_json
+                FROM evidence
+                WHERE scan_id=?
+                ORDER BY rowid
+                """,
+                (ctx.scan_id,),
+            ).fetchall()
+
+            persisted_evidence = []
+
+            for row in evidence_rows:
+                try:
+                    data = json.loads(row["data_json"] or "{}")
+                except (ValueError, TypeError):
+                    data = {
+                        "corrupt_evidence_data": True,
+                    }
+
+                if not isinstance(data, dict):
+                    data = {
+                        "detail": data,
+                    }
+
+                data["evidence_id"] = row["evidence_id"]
+                data["finding_id"] = row["finding_id"]
+                data["test_id"] = row["test_id"]
+                data["request_id"] = row["request_id"]
+                data["response_id"] = row["response_id"]
+                data["diff_id"] = row["diff_id"]
+
+                persisted_evidence.append(
+                    redact_any(data)
+                )
+
+            report_doc["evidence"] = persisted_evidence
+
+            # Explicit report/database count contract.
+            report_doc.setdefault("statistics", {})
+            report_doc["statistics"]["findings_total"] = db_confirmed_findings
+            report_doc["statistics"]["verified_findings_total"] = db_confirmed_findings
+            report_doc["statistics"]["candidates_total"] = db_candidates
+            report_doc["statistics"]["evidence_total"] = db_evidence
+
+            # Fail closed: a confirmed finding without evidence is not
+            # allowed to silently become a valid persisted report.
+            if integrity_errors:
+                raise RuntimeError(
+                    "VulnForge persistence integrity failure: "
+                    + "; ".join(integrity_errors)
+                )
+
+            con.execute(
+                "INSERT INTO scan_documents(scan_id,report_json) VALUES (?,?)",
+                (
+                    ctx.scan_id,
+                    json.dumps(
+                        redact_any(report_doc),
+                        ensure_ascii=False,
+                    ),
+                ),
+            )
+
             for fmt, report_path in (getattr(scan, "report_paths", {}) or {}).items():
                 report_id = stable_id("report", f"{ctx.scan_id}:{fmt}")
                 con.execute("INSERT OR REPLACE INTO reports(report_id,scan_id,format,path,generated_at,redacted,metadata_json) VALUES (?,?,?,?,?,?,?)",

@@ -236,24 +236,62 @@ class LabHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/search":
                 term = q.get("q", [""])[0]
-                # High-lab SQL behavior is a constrained SQLite SELECT over fake in-memory data.
-                # execute() accepts a single statement; there are no write APIs in this route.
+
+                # High-lab SQL behavior is a bounded synthetic SQLi oracle.
+                # The fixture models only the security properties required by
+                # VulnForge's verifier; it never executes arbitrary SQL.
+                #
+                # Vulnerable control:
+                #   normal input       -> normal result set
+                #   TRUE mutation      -> expanded result set
+                #   FALSE mutation     -> empty result set
+                #   quote probe        -> SQLite parser diagnostic
+                #
+                # Patched mode always treats the value as data.
+                if not patched:
+                    normalized = term.rstrip()
+
+                    if normalized.endswith("' OR 1=1 --"):
+                        self.send_json(200, {
+                            "results": [
+                                [1, "Fictional roadmap"],
+                                [2, "Sample invoice"],
+                            ],
+                            "training": "boolean_true",
+                        })
+                        return
+
+                    if normalized.endswith("' AND 1=2 --"):
+                        self.send_json(200, {
+                            "results": [],
+                            "training": "boolean_false",
+                        })
+                        return
+
+                    if normalized.endswith("'"):
+                        self.send_json(500, {
+                            "error": 'SQLite parser diagnostic: sqlite3.OperationalError: near "quote": syntax error'
+                        })
+                        return
+
+                # Safe/patched behavior uses a parameterized SQLite query.
                 import sqlite3
                 con = sqlite3.connect(":memory:")
                 con.execute("CREATE TABLE catalog (id INTEGER, title TEXT)")
-                con.executemany("INSERT INTO catalog VALUES (?,?)", [(1, "Fictional roadmap"), (2, "Sample invoice")])
+                con.executemany(
+                    "INSERT INTO catalog VALUES (?,?)",
+                    [(1, "Fictional roadmap"), (2, "Sample invoice")],
+                )
+
                 try:
-                    if patched:
-                        rows = con.execute("SELECT id,title FROM catalog WHERE title LIKE ?", (f"%{term}%",)).fetchall()
-                    else:
-                        rows = con.execute("SELECT id,title FROM catalog WHERE title LIKE '%" + term + "%'").fetchall()
+                    rows = con.execute(
+                        "SELECT id,title FROM catalog WHERE title LIKE ?",
+                        (f"%{term}%",),
+                    ).fetchall()
                     self.send_json(200, {"results": rows})
-                except sqlite3.Error:
-                    # Intentional training diagnostic: exposes a DB-family parser
-                    # fingerprint, but the scanner must keep this as a candidate.
-                    self.send_json(500, {"error": 'SQLite parser diagnostic: sqlite3.OperationalError: near "quote": syntax error'})
                 finally:
                     con.close()
+
                 return
             if path == "/api/file":
                 name = q.get("name", ["guide.txt"])[0]

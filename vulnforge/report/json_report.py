@@ -21,6 +21,65 @@ def _records(items):
     return [item.to_dict() if hasattr(item, "to_dict") else item for item in items]
 
 
+def _field(item, name, default=None):
+    """Read a field from either a dict record or a model/object."""
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
+def _status(item):
+    return str(_field(item, "status", "") or "").upper()
+
+
+def _endpoint(item):
+    return str(_field(item, "endpoint", "") or "")
+
+
+def _parameter(item):
+    return str(_field(item, "parameter", "") or "")
+
+
+def _finding_state_counts(items):
+    """Canonical lifecycle counts used by every report renderer."""
+    records = list(items or [])
+
+    confirmed = sum(
+        1 for item in records
+        if _status(item) in {"VERIFIED", "CONFIRMED"}
+    )
+
+    candidates = sum(
+        1 for item in records
+        if _status(item) not in {"VERIFIED", "CONFIRMED"}
+    )
+
+    killed = sum(
+        1 for item in records
+        if _status(item) == "KILLED"
+    )
+
+    unconfirmed = sum(
+        1 for item in records
+        if _status(item) == "UNCONFIRMED"
+    )
+
+    skipped = sum(
+        1 for item in records
+        if _status(item) == "SKIPPED"
+    )
+
+    return {
+        "total_records": len(records),
+        "confirmed": confirmed,
+        "verified": confirmed,
+        "candidates": candidates,
+        "unconfirmed": unconfirmed,
+        "killed": killed,
+        "skipped": skipped,
+    }
+
+
 def _with_test_outcomes(items):
     records = deepcopy(list(items or []))
     for item in records:
@@ -100,8 +159,17 @@ def build_report_dict(scan) -> Dict[str, Any]:
     ctx = scan.context
     sev_order = ["critical", "high", "medium", "low", "info"]
     sev_counts = {s: 0 for s in sev_order}
-    verified = list(getattr(ctx,"verified_findings",[])) or [f for f in ctx.findings if f.status=="VERIFIED"]
-    candidates = [f for f in ctx.findings if f.status!="VERIFIED"]
+    all_findings = list(getattr(ctx, "findings", []) or [])
+
+    verified = [
+        f for f in all_findings
+        if _status(f) in {"VERIFIED", "CONFIRMED"}
+    ]
+
+    candidates = [
+        f for f in all_findings
+        if _status(f) not in {"VERIFIED", "CONFIRMED"}
+    ]
     for f in verified:
         sev_counts[f.severity.lower() if f.severity.lower() in sev_counts else "info"] += 1
     test_records=_with_test_outcomes(getattr(ctx,"tests",[]))
@@ -109,8 +177,29 @@ def build_report_dict(scan) -> Dict[str, Any]:
     verified_records=_with_finding_outcomes(verified)
     candidate_records=_with_finding_outcomes(candidates)
     result_summary={
-        "tests":outcome_counts(test_records),
-        "classes":outcome_counts(class_records,classifier=class_result_status),
+        "tests": outcome_counts(test_records),
+        "classes": outcome_counts(
+            class_records,
+            classifier=class_result_status,
+        ),
+        "findings": _finding_state_counts(all_findings),
+    }
+
+    evidence_records = _records(getattr(ctx, "evidence", []))
+
+    finding_summary = _finding_state_counts(all_findings)
+
+    integrity = {
+        "database_source_of_truth": True,
+        "validated": False,
+        "hypotheses": len(getattr(ctx, "hypotheses", []) or []),
+        "tests": len(getattr(ctx, "tests", []) or []),
+        "test_runs": 0,
+        "findings_total": finding_summary["total_records"],
+        "confirmed_findings": finding_summary["confirmed"],
+        "candidates": finding_summary["candidates"],
+        "evidence": len(evidence_records),
+        "integrity_errors": [],
     }
     duration = (ctx.stats.finished_at or time.time()) - ctx.stats.started_at
     return redact_any({
@@ -152,6 +241,8 @@ def build_report_dict(scan) -> Dict[str, Any]:
                        "candidates_total": len(candidates),
                        "by_severity": sev_counts},
         "result_summary": result_summary,
+        "finding_summary": finding_summary,
+        "integrity": integrity,
         "technologies": [t.to_dict() for t in ctx.technologies.values()],
         "intelligence": getattr(ctx, "intelligence", {}),
         "frontend_intelligence": getattr(ctx,"frontend_intelligence",{}),
@@ -172,6 +263,7 @@ def build_report_dict(scan) -> Dict[str, Any]:
         "hypotheses": _records(getattr(ctx, "hypotheses", [])),
         "test_plan": _records(getattr(ctx,"test_plan",[])),
         "tests": test_records,
+        "evidence": evidence_records,
         "attack_paths": _records(getattr(ctx,"attack_paths",[])),
         "attack_path_summary": {
             "records": len(getattr(ctx,"attack_paths",[])),

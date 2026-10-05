@@ -29,10 +29,20 @@ def _auth_data():
             },
             "sensitive_fields": ["email"],
         }],
+        "privilege_escalation_tests": [{
+            "url": "/api/admin/users",
+            "authorized_identity": "owner",
+            "lower_identity": "other",
+            "identity_assertion": {
+                "header": "X-Lab-Principal",
+                "authorized_value": "alice",
+                "lower_value": "bob",
+            },
+        }],
     }
 
 
-def _scan_high(patched, tmp_path):
+def _scan_high(patched, tmp_path, auth_data=None):
     server = create_server("high", "127.0.0.1", 0, patched=patched)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -54,7 +64,7 @@ def _scan_high(patched, tmp_path):
             request_rate=12,
             request_budget=100,
             request_timeout=2,
-            auth_data=_auth_data(),
+            auth_data=_auth_data() if auth_data is None else auth_data,
         )
         result = run_scan(config, authorization)
     finally:
@@ -117,11 +127,11 @@ def _scan_high(patched, tmp_path):
         if row["class_id"] == "sqli"
     )
 
-    if not patched:
-        assert sqli_coverage["can_confirm"] is False
-        assert sqli_coverage["verification_level"] == "OBSERVATION_ONLY"
-    else:
-        assert sqli_coverage["can_confirm"] is False
+    # SQLi now has an evidence-backed verification contract.
+    # The vulnerable lab must therefore advertise confirmation capability,
+    # while the patched lab must still produce no verified finding.
+    assert sqli_coverage["can_confirm"] is True
+    assert sqli_coverage["verification_level"] == "CONTROLLED_SEMANTIC_VERIFICATION"
     assert report["report_manifest"]
 
     json_doc = build_report_dict(result)
@@ -143,3 +153,44 @@ def test_high_lab_full_engine_data_path_vulnerable_and_patched_controls(tmp_path
     assert vulnerable.context.stats.requests_sent <= 100
     assert patched.context.stats.requests_sent <= 100
     assert vulnerable.context.tests and patched.context.tests
+
+
+def test_high_lab_auto_discovers_privilege_boundary(tmp_path):
+    auth_data = _auth_data()
+    auth_data.pop("privilege_escalation_tests", None)
+
+    vulnerable, findings = _scan_high(
+        False,
+        tmp_path,
+        auth_data=auth_data,
+    )
+
+    def finding_field(finding, field, default=""):
+        if isinstance(finding, dict):
+            return finding.get(field, default)
+        return getattr(finding, field, default)
+
+    privilege_findings = [
+        finding
+        for finding in findings
+        if str(
+            finding_field(finding, "category")
+        ).lower()
+        == "privilege escalation"
+    ]
+
+    assert privilege_findings, (
+        "Automatic privilege-boundary discovery did not produce "
+        "a privilege-escalation finding"
+    )
+
+    assert any(
+        "/api/admin/users"
+        in str(finding_field(finding, "endpoint"))
+        for finding in privilege_findings
+    ), "Expected /api/admin/users to be automatically tested"
+
+    assert any(
+        str(finding_field(finding, "status")).upper() == "VERIFIED"
+        for finding in privilege_findings
+    ), "Privilege escalation must be evidence-verified"

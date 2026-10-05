@@ -443,75 +443,291 @@ class IntelligenceStage(Stage):
 
 class ApiModelStage(Stage):
     name, title = "api-model", "Endpoint and API model"
-    async def run(self, ctx):
-        from urllib.parse import urlsplit
-        from .api_schema import parse_openapi_json
-        ctx.api_inventory=[]
-        for ep in ctx.endpoints.values():
-            path=urlsplit(ep.url).path
-            low=path.lower()
-            indicators=[]
-            if low.startswith("/api") or "/api/" in low: indicators.append("API-like path")
-            if any(x in low for x in ("openapi","swagger","graphql")): indicators.append("API schema/route term")
-            if indicators:
-                ctx.api_inventory.append({"endpoint":ep.url,"method":ep.method,
-                    "signals":indicators,"source":ep.source,"contract":"NOT DETERMINED"})
 
-        # Fetch only schema-like links explicitly observed in parsed same-scan
-        # pages. The central Requester rechecks authorization, scope, budget,
-        # redirects, stop state, and response size for every document request.
-        result=getattr(ctx,"_crawl_result",None)
-        candidates={}
+    async def run(self, ctx):
+        from urllib.parse import urlsplit, urljoin
+        import re
+
+        from .api_schema import parse_openapi_json
+
+        ctx.api_inventory = []
+
+        # ------------------------------------------------------------
+        # 1. Promote already observed API-like endpoints.
+        # ------------------------------------------------------------
+        for ep in ctx.endpoints.values():
+            path = urlsplit(ep.url).path
+            low = path.lower()
+            indicators = []
+
+            if low.startswith("/api") or "/api/" in low:
+                indicators.append("API-like path")
+            if any(x in low for x in ("openapi", "swagger", "graphql")):
+                indicators.append("API schema/route term")
+
+            if indicators:
+                ctx.api_inventory.append({
+                    "endpoint": ep.url,
+                    "method": ep.method,
+                    "signals": indicators,
+                    "source": ep.source,
+                    "contract": "NOT DETERMINED",
+                })
+
+        # ------------------------------------------------------------
+        # 2. Discover schema documents from same-scan links / JS.
+        # ------------------------------------------------------------
+        candidates = {}
+
+        result = getattr(ctx, "_crawl_result", None)
         if result:
-            import re
-            schema_path=re.compile(r"(?:openapi|swagger|api[-_]?docs)(?:[-_.][^/]*)?$|/v\d+/api-docs(?:\.[^/]*)?$",re.I)
-            for page,parser in result.parsed:
+            schema_path = re.compile(
+                r"(?:openapi|swagger|api[-_]?docs)(?:[-_.][^/]*)?$"
+                r"|/v\d+/api-docs(?:\.[^/]*)?$",
+                re.I,
+            )
+
+            for page, parser in result.parsed:
                 for link in parser.links:
-                    path=urlsplit(link).path.rstrip("/")
-                    low_path=path.lower()
-                    basename=low_path.rsplit("/",1)[-1]
-                    json_or_known_route=low_path.endswith(".json") or basename in {"openapi","swagger","api-docs"} or re.search(r"/v[0-9]+/api-docs$",low_path)
-                    if json_or_known_route and not low_path.endswith((".yaml",".yml")) and schema_path.search(path):
-                        candidates.setdefault(link,page.exchange_id)
-        if hasattr(ctx, "_js_candidates"):
-            import re
-            schema_path_js=re.compile(r"(?:openapi|swagger|api[-_]?docs)(?:[-_.][^/]*)?$|/v\d+/api-docs(?:\.[^/]*)?$",re.I)
-            js_sources=getattr(ctx,"_js_candidate_sources",{})
-            for link in getattr(ctx,"_js_candidates",[]):
-                path=urlsplit(link).path.rstrip("/")
-                low_path=path.lower()
-                basename=low_path.rsplit("/",1)[-1]
-                json_or_known_route=low_path.endswith(".json") or basename in {"openapi","swagger","api-docs"} or re.search(r"/v[0-9]+/api-docs$",low_path)
-                if json_or_known_route and not low_path.endswith((".yaml",".yml")) and schema_path_js.search(path):
-                    src_ids=js_sources.get(link,[])
-                    candidates.setdefault(link,src_ids[0] if src_ids else "")
-        ctx.api_documents=[]
-        for url,source_exchange_id in list(candidates.items())[:3]:
-            if ctx.authorization.stopped or ctx.requester.budget.sent>=ctx.requester.budget.max_requests:
+                    path = urlsplit(link).path.rstrip("/")
+                    low_path = path.lower()
+                    basename = low_path.rsplit("/", 1)[-1]
+
+                    json_or_known_route = (
+                        low_path.endswith(".json")
+                        or basename in {"openapi", "swagger", "api-docs"}
+                        or re.search(r"/v[0-9]+/api-docs$", low_path)
+                    )
+
+                    if (
+                        json_or_known_route
+                        and not low_path.endswith((".yaml", ".yml"))
+                        and schema_path.search(path)
+                    ):
+                        candidates.setdefault(link, page.exchange_id)
+
+        js_candidates = getattr(ctx, "_js_candidates", [])
+        js_sources = getattr(ctx, "_js_candidate_sources", {})
+
+        for link in js_candidates:
+            path = urlsplit(link).path.rstrip("/")
+            low_path = path.lower()
+            basename = low_path.rsplit("/", 1)[-1]
+
+            json_or_known_route = (
+                low_path.endswith(".json")
+                or basename in {"openapi", "swagger", "api-docs"}
+                or re.search(r"/v[0-9]+/api-docs$", low_path)
+            )
+
+            if (
+                json_or_known_route
+                and not low_path.endswith((".yaml", ".yml"))
+                and (
+                    re.search(
+                        r"(?:openapi|swagger|api[-_]?docs)(?:[-_.][^/]*)?$"
+                        r"|/v\d+/api-docs(?:\.[^/]*)?$",
+                        path,
+                        re.I,
+                    )
+                )
+            ):
+                src_ids = js_sources.get(link, [])
+                candidates.setdefault(link, src_ids[0] if src_ids else "")
+
+        # ------------------------------------------------------------
+        # 3. Bounded same-origin fallback.
+        #
+        # Real applications frequently expose API contracts without
+        # linking them from the HTML. Keep this list deliberately small.
+        # All requests still pass through AuthorizationContext and the
+        # central Requester.
+        # ------------------------------------------------------------
+        if not candidates:
+            target = str(ctx.config.target)
+            parts = urlsplit(target)
+
+            if parts.scheme and parts.netloc:
+                base = f"{parts.scheme}://{parts.netloc}"
+
+                fallback_paths = (
+                    "/openapi.json",
+                    "/api/openapi.json",
+                    "/swagger.json",
+                    "/api/swagger.json",
+                    "/api-docs",
+                    "/api/api-docs",
+                    "/docs/openapi.json",
+                    "/v1/openapi.json",
+                    "/v2/openapi.json",
+                    "/api/v1/openapi.json",
+                    "/api/v2/openapi.json",
+                )
+
+                for path in fallback_paths:
+                    url = urljoin(base + "/", path.lstrip("/"))
+                    candidates.setdefault(url, "")
+
+        # ------------------------------------------------------------
+        # 4. Fetch and parse bounded candidate documents.
+        # ------------------------------------------------------------
+        ctx.api_documents = []
+
+        for url, source_exchange_id in list(candidates.items())[:5]:
+            if (
+                ctx.authorization.stopped
+                or ctx.requester.budget.sent >= ctx.requester.budget.max_requests
+            ):
                 break
-            allowed,reason=ctx.authorization.check(url,purpose="api-schema")
+
+            allowed, reason = ctx.authorization.check(url, purpose="api-schema")
+
             if not allowed:
-                ctx.api_documents.append({"document_url":url,"status":"SCOPE_REJECTED",
-                    "source_exchange_id":source_exchange_id,"reason":reason})
+                ctx.api_documents.append({
+                    "document_url": url,
+                    "status": "SCOPE_REJECTED",
+                    "source_exchange_id": source_exchange_id,
+                    "reason": reason,
+                })
                 continue
-            exchange=await ctx.requester.send("GET",url,module="api-schema")
-            if not exchange.ok or exchange.status!=200:
-                ctx.api_documents.append({"document_url":url,"status":"FETCH_FAILED",
-                    "source_exchange_id":source_exchange_id,"exchange_id":exchange.exchange_id,
-                    "http_status":exchange.status,"error":exchange.error or "non-200 response"})
+
+            exchange = await ctx.requester.send(
+                "GET",
+                url,
+                module="api-schema",
+            )
+
+            if not exchange.ok or exchange.status != 200:
+                ctx.api_documents.append({
+                    "document_url": url,
+                    "status": "FETCH_FAILED",
+                    "source_exchange_id": source_exchange_id,
+                    "exchange_id": exchange.exchange_id,
+                    "http_status": exchange.status,
+                    "error": exchange.error or "non-200 response",
+                })
                 continue
-            document=parse_openapi_json(exchange.response_body,document_url=exchange.url,
-                                        exchange_id=exchange.exchange_id)
-            document["source_exchange_id"]=source_exchange_id
+
+            document = parse_openapi_json(
+                exchange.response_body,
+                document_url=exchange.url,
+                exchange_id=exchange.exchange_id,
+            )
+            document["source_exchange_id"] = source_exchange_id
             ctx.api_documents.append(document)
-            if document.get("status")=="PARSED":
-                for operation in document.get("operations",[]):
-                    ctx.api_inventory.append({**operation,"document_url":document["document_url"],
-                        "exchange_id":exchange.exchange_id,"source_exchange_id":source_exchange_id,
-                        "contract":"DECLARED_NOT_VALIDATED"})
-        declared=sum(1 for item in ctx.api_inventory if item.get("contract")=="DECLARED_NOT_VALIDATED")
-        ctx.emit("stage",f"API model: {len(ctx.api_inventory)-declared} observed API-like endpoint(s); "
-                  f"{declared} declared operation(s) from {len(ctx.api_documents)} linked document(s), not validated")
+
+            if document.get("status") == "PARSED":
+                for operation in document.get("operations", []):
+                    ctx.api_inventory.append({
+                        **operation,
+                        "document_url": document["document_url"],
+                        "exchange_id": exchange.exchange_id,
+                        "source_exchange_id": source_exchange_id,
+                        "contract": "DECLARED_NOT_VALIDATED",
+                    })
+
+        declared = sum(
+            1
+            for item in ctx.api_inventory
+            if item.get("contract") == "DECLARED_NOT_VALIDATED"
+        )
+
+        ctx.emit(
+            "stage",
+            f"API model: {len(ctx.api_inventory) - declared} "
+            f"observed API-like endpoint(s); "
+            f"{declared} declared operation(s) from "
+            f"{len(ctx.api_documents)} linked document(s), not validated",
+        )
+
+        return ctx
+
+
+class ApiContractValidationStage(Stage):
+    """
+    Validate declared API contracts using bounded, read-only HTTP requests.
+
+    Important:
+        This stage establishes API reachability and contract observations.
+        It does not create vulnerability findings.
+    """
+
+    name, title = "api-contract-validation", "API contract validation"
+
+    async def run(self, ctx):
+        from .api_validation import validate_api_operations
+
+        results = await validate_api_operations(ctx)
+        ctx.api_validation = results
+
+        # Update the declaration records in-place so every later stage sees
+        # the same canonical API state.
+        by_key = {}
+        for item in results:
+            key = (
+                str(item.get("method", "")).upper(),
+                str(item.get("path", "")),
+                str(item.get("operation_id", "")),
+                str(item.get("document_url", "")),
+            )
+            by_key[key] = item
+
+        validated = 0
+        reachable = 0
+
+        for operation in getattr(ctx, "api_inventory", []) or []:
+            if operation.get("contract") != "DECLARED_NOT_VALIDATED":
+                continue
+
+            key = (
+                str(operation.get("method", "")).upper(),
+                str(operation.get("path", "")),
+                str(operation.get("operation_id", "")),
+                str(operation.get("document_url", "")),
+            )
+
+            result = by_key.get(key)
+            if not result:
+                continue
+
+            operation["validation_status"] = result.get(
+                "validation_status",
+                "NOT_VALIDATED",
+            )
+            operation["validation_reason"] = result.get("reason", "")
+            operation["validation_exchange_id"] = result.get(
+                "exchange_id",
+                "",
+            )
+            operation["validation_url"] = result.get(
+                "request_url",
+                "",
+            )
+            operation["observed_status"] = result.get(
+                "http_status",
+                0,
+            )
+            operation["observed_content_type"] = result.get(
+                "response_content_type",
+                "",
+            )
+            operation["contract_observation"] = result.get(
+                "contract_observation",
+                {},
+            )
+
+            validated += 1
+
+            if result.get("validation_status") == "REACHABLE":
+                reachable += 1
+
+        ctx.emit(
+            "stage",
+            f"API validation: {validated} declaration(s) evaluated; "
+            f"{reachable} reachable; "
+            f"{len(results)} validation result(s) recorded",
+        )
+
         return ctx
 
 
@@ -849,6 +1065,354 @@ class HypothesisStage(Stage):
                 evidence=list(getattr(endpoint,"evidence_ids",[]) or []),confidence=0.25,
                 test_strategy="paired external reserved-marker and same-origin-control GETs; redirects are never followed",
                 request_cost=2,risk="SAFE_ACTIVE"))
+        # Reflected XSS candidates: only observed GET query parameters are eligible.
+        xss_seen = set()
+        xss_names = {
+            "q", "query", "search", "term", "keyword", "name",
+            "message", "text", "title", "comment", "value", "input",
+        }
+        ctx._xss_hypotheses = []
+
+        for endpoint in ctx.endpoints.values():
+            if (
+                endpoint.method.upper() != "GET"
+                or endpoint.scope_status != "IN_SCOPE"
+                or not 200 <= int(endpoint.status or 0) < 300
+            ):
+                continue
+
+            for parameter in endpoint.params:
+                name = str(parameter.name).strip()
+
+                if parameter.location != "query":
+                    continue
+                if ctx.authorization.param_excluded(name):
+                    continue
+                if name.lower() not in xss_names:
+                    continue
+
+                key = (str(endpoint.url), name)
+                if key in xss_seen:
+                    continue
+
+                allowed, reason = ctx.authorization.check(
+                    str(endpoint.url),
+                    purpose="xss-hypothesis",
+                    method="GET",
+                )
+                if not allowed:
+                    continue
+
+                xss_seen.add(key)
+                hypothesis_id = "hyp-" + uuid.uuid4().hex[:12]
+
+                ctx.hypotheses.append(
+                    HypothesisRecord(
+                        hypothesis_id,
+                        "xss-reflection-review",
+                        "KEEP",
+                        endpoint=str(endpoint.url),
+                        parameter=name,
+                        reason="Observed in-scope GET query parameter is eligible for bounded reflected-XSS verification; reflection and execution are not assumed.",
+                        evidence=list(getattr(endpoint, "evidence_ids", []) or []),
+                        confidence=0.2,
+                        test_strategy="baseline, unique harmless marker, encoded control, context analysis, browser execution proof and repeat",
+                        request_cost=4,
+                        risk="SAFE_ACTIVE",
+                    )
+                )
+
+                ctx._xss_hypotheses.append({
+                    "hypothesis_id": hypothesis_id,
+                    "url": str(endpoint.url),
+                    "parameter": name,
+                    "evidence_ids": list(getattr(endpoint, "evidence_ids", []) or []),
+                })
+
+                if len(xss_seen) >= 3:
+                    break
+
+            if len(xss_seen) >= 3:
+                break
+
+        # Explicit privilege-escalation hypothesis: requires researcher-supplied
+        # role identities and a protected function; endpoint names alone are insufficient.
+        auth_data = ctx.config.auth_data or {}
+
+        # Privilege-escalation candidates may be discovered automatically when
+        # two researcher-supplied identities are available.  Endpoint naming
+        # creates a hypothesis only; it never creates a finding.
+        privilege_specs = list(
+            auth_data.get("privilege_escalation_tests", []) or []
+        )
+
+        identities = auth_data.get("identities", {})
+        if (
+            not privilege_specs
+            and isinstance(identities, dict)
+            and len(identities) >= 2
+        ):
+            identity_items = [
+                (str(name), value)
+                for name, value in identities.items()
+                if isinstance(value, dict)
+            ]
+
+            privileged_roles = {
+                "admin",
+                "administrator",
+                "owner",
+                "privileged",
+                "superadmin",
+                "superuser",
+            }
+
+            privileged_names = {
+                "admin",
+                "administrator",
+                "owner",
+                "privileged",
+                "superadmin",
+                "superuser",
+            }
+
+            def _identity_rank(item):
+                name, data = item
+                normalized_name = str(name).strip().lower()
+                role = str(data.get("role", "")).strip().lower()
+
+                if role in privileged_roles:
+                    priority = 0
+                elif normalized_name in privileged_names:
+                    priority = 1
+                else:
+                    priority = 2
+
+                return (priority, normalized_name)
+
+            identity_items.sort(key=_identity_rank)
+
+            authorized_name, authorized_data = identity_items[0]
+
+            lower_candidates = [
+                item
+                for item in identity_items[1:]
+                if (
+                    str(item[1].get("role", "")).strip().lower()
+                    not in privileged_roles
+                    and str(item[0]).strip().lower()
+                    not in privileged_names
+                )
+            ]
+
+            lower_name, lower_data = (
+                lower_candidates[0]
+                if lower_candidates
+                else identity_items[1]
+            )
+
+            protected_markers = (
+                "/admin",
+                "/administrator",
+                "/management",
+                "/settings",
+                "/roles",
+                "/permissions",
+                "/users",
+                "/team",
+                "/billing",
+                "/organization",
+                "/tenant",
+            )
+
+            discovered_privilege_candidates = []
+            seen_privilege_urls = set()
+
+            for endpoint in getattr(ctx, "endpoints", {}).values():
+                endpoint_url = str(getattr(endpoint, "url", "") or "")
+                if not endpoint_url:
+                    continue
+
+                parts = urlsplit(endpoint_url)
+                path = (parts.path or "/").lower()
+
+                if not any(marker in path for marker in protected_markers):
+                    continue
+
+                safe_url = (
+                    f"{parts.scheme}://{parts.netloc}{parts.path or '/'}"
+                )
+
+                if safe_url in seen_privilege_urls:
+                    continue
+
+                seen_privilege_urls.add(safe_url)
+
+                def _identity_assertion_value(identity_data, identity_name):
+                    """Infer the expected response principal safely."""
+                    if not isinstance(identity_data, dict):
+                        return str(identity_name)
+
+                    for field in ("principal", "username"):
+                        value = identity_data.get(field)
+                        if value:
+                            return str(value)
+
+                    headers = identity_data.get("headers", {})
+                    if isinstance(headers, dict):
+                        preferred_headers = {
+                            "x-lab-user",
+                            "x-user",
+                            "x-principal",
+                            "x-lab-principal",
+                        }
+
+                        for header_name, header_value in headers.items():
+                            if (
+                                str(header_name).lower() in preferred_headers
+                                and header_value
+                            ):
+                                return str(header_value)
+
+                    return str(identity_name)
+
+                discovered_privilege_candidates.append(
+                    {
+                        "url": safe_url,
+                        "authorized_identity": authorized_name,
+                        "lower_identity": lower_name,
+                        "identity_assertion": {
+                            "header": str(
+                                auth_data.get(
+                                    "privilege_identity_header",
+                                    "X-Lab-Principal",
+                                )
+                            ),
+                            "authorized_value": _identity_assertion_value(
+                                authorized_data,
+                                authorized_name,
+                            ),
+                            "lower_value": _identity_assertion_value(
+                                lower_data,
+                                lower_name,
+                            ),
+                        },
+                        "discovery_source": (
+                            "endpoint-authorization-boundary"
+                        ),
+                    }
+                )
+
+            def _privilege_candidate_rank(candidate):
+                candidate_url = str(candidate.get("url", "") or "")
+                candidate_path = urlsplit(candidate_url).path.lower()
+
+                score = 0
+
+                # API protected-function boundaries are the strongest
+                # candidates because they commonly represent callable
+                # authorization boundaries rather than ordinary pages.
+                if candidate_path.startswith("/api/admin"):
+                    score += 100
+                elif "/api/administrator" in candidate_path:
+                    score += 95
+                elif "/api/management" in candidate_path:
+                    score += 90
+                elif candidate_path.startswith("/admin"):
+                    score += 80
+                elif "/management" in candidate_path:
+                    score += 70
+
+                # Resource/role management operations are stronger than
+                # generic settings pages.
+                for marker, weight in (
+                    ("/users", 50),
+                    ("/roles", 45),
+                    ("/permissions", 45),
+                    ("/billing", 40),
+                    ("/organization", 40),
+                    ("/tenant", 40),
+                    ("/team", 35),
+                    ("/settings", 20),
+                ):
+                    if marker in candidate_path:
+                        score += weight
+
+                # Prefer deeper protected API resources such as
+                # /api/admin/users over a generic /admin landing page.
+                if candidate_path.startswith("/api/"):
+                    score += 10
+
+                # Prefer endpoints that look like concrete resources or
+                # actions over a bare protected-area landing page.
+                segments = [part for part in candidate_path.split("/") if part]
+                if len(segments) >= 3:
+                    score += 5
+
+                return (-score, candidate_path, candidate_url)
+
+            discovered_privilege_candidates.sort(
+                key=_privilege_candidate_rank
+            )
+
+            privilege_specs = discovered_privilege_candidates[:3]
+
+
+            if privilege_specs:
+                ctx.emit(
+                    "stage",
+                    "Privilege-escalation discovery: "
+                    f"{len(privilege_specs)} candidate protected function(s) "
+                    "from observed endpoints",
+                )
+
+        ctx._privilege_escalation_test_specs = []
+        for spec in privilege_specs[:3]:
+            if not spec.get("url") or not spec.get("authorized_identity") or not spec.get("lower_identity"):
+                continue
+            hypothesis_id = "hyp-" + uuid.uuid4().hex[:12]
+            ctx.hypotheses.append(HypothesisRecord(
+                hypothesis_id,
+                "privilege-escalation-review",
+                "KEEP",
+                endpoint=str(spec["url"]),
+                parameter="",
+                reason="Researcher-declared protected function with distinct authorized and lower-privilege identities.",
+                evidence=[],
+                confidence=0.3,
+                test_strategy="authorized baseline, lower-role control, lower-role repeat and role-separation comparison",
+                request_cost=3,
+                risk="LOW_READ_ONLY",
+            ))
+            spec = dict(spec)
+            spec["hypothesis_id"] = hypothesis_id
+            ctx._privilege_escalation_test_specs.append(spec)
+
+        # Explicit path-traversal hypothesis: requires a researcher-approved file
+        # parameter and safe baseline/traversal fixture.
+        path_specs = list(auth_data.get("path_traversal_tests", []) or [])
+        ctx._path_traversal_test_specs = []
+        for spec in path_specs[:3]:
+            if not spec.get("url") or not spec.get("parameter") or not spec.get("safe_value") or not spec.get("traversal_value"):
+                continue
+            hypothesis_id = "hyp-" + uuid.uuid4().hex[:12]
+            ctx.hypotheses.append(HypothesisRecord(
+                hypothesis_id,
+                "path-traversal-review",
+                "KEEP",
+                endpoint=str(spec["url"]),
+                parameter=str(spec["parameter"]),
+                reason="Researcher-declared file/path parameter with an approved safe fixture and bounded traversal control.",
+                evidence=[],
+                confidence=0.3,
+                test_strategy="safe file baseline, bounded traversal mutation and traversal repeat",
+                request_cost=3,
+                risk="LOW_READ_ONLY",
+            ))
+            spec = dict(spec)
+            spec["hypothesis_id"] = hypothesis_id
+            ctx._path_traversal_test_specs.append(spec)
+
         from .sql_injection_verification import collect_sql_injection_candidates
         sql_candidates=collect_sql_injection_candidates(ctx)
         ctx._sql_injection_candidate_specs=[]
@@ -878,23 +1442,26 @@ class TestPlanningStage(Stage):
         from ..core.profiles import get_profile
         from .methodology import build_test_methodology
         from .strategy_registry import select_strategies, strategy_public_dict
-        from .vulnerability_registry import VULNERABILITY_CLASSES, build_vulnerability_matrix
+        from .vulnerability_registry import PROFILE_NAMES, VULNERABILITY_CLASSES, build_vulnerability_matrix
         from .verification import expand_authorization_specs
         specs=expand_authorization_specs(ctx.config.auth_data)
         bola_hypotheses=[h for h in ctx.hypotheses if h.category=="object-level-authorization"]
         cors_hypotheses=[h for h in ctx.hypotheses if h.category=="cors-policy-review"]
         redirect_hypotheses=[h for h in ctx.hypotheses if h.category=="open-redirect-review"]
         sql_hypotheses=[h for h in ctx.hypotheses if h.category=="sql-injection-review"]
+        xss_hypotheses=[h for h in ctx.hypotheses if h.category=="xss-reflection-review"]
         profile=get_profile(ctx.config.profile_name)
         test_profile=getattr(ctx.config,"test_profile","full")
         bola_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["bola"]["profiles"])
         cors_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["cors"]["profiles"])
         redirect_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["open_redirect"]["profiles"])
         sqli_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["sqli"]["profiles"])
+        xss_selected = test_profile in PROFILE_NAMES
         ctx._authorization_test_specs=[]
         ctx._cors_test_specs=[]
         ctx._open_redirect_test_specs=[]
         ctx._sql_injection_test_specs=[]
+        ctx._xss_test_specs=[]
         can_run=bool(ctx.config.active_requested and profile.allows_active and not ctx.authorization.stopped)
         reserved=0
         budget=getattr(getattr(ctx,"requester",None),"budget",None)
@@ -1034,6 +1601,173 @@ class TestPlanningStage(Stage):
                 if plan_status=="PLANNED":
                     ctx._sql_injection_test_specs.append({**candidate,"test_id":planned.test_id})
                     reserved+=6
+        if xss_selected:
+            candidates = {
+                str(item.get("hypothesis_id")): item
+                for item in getattr(ctx, "_xss_hypotheses", [])
+            }
+
+            for hypothesis in xss_hypotheses[:3]:
+                candidate = candidates.get(hypothesis.hypothesis_id)
+                if not candidate:
+                    continue
+
+                enough = reserved + 4 <= available
+                allowed, reason = ctx.authorization.check(
+                    candidate["url"],
+                    purpose="xss-test-plan",
+                    method="GET",
+                )
+                plan_status = "PLANNED" if can_run and enough and allowed else "BLOCKED"
+
+                methodology = build_test_methodology(
+                    "xss-reflection-validation",
+                    hypothesis.endpoint,
+                )
+                methodology = attach_strategy(
+                    methodology,
+                    "xss",
+                    surface="web",
+                    capabilities=("observed reflected input",),
+                )
+
+                if not can_run:
+                    methodology["status"] = "BLOCKED_ACTIVE_MODE"
+                elif not enough:
+                    methodology["status"] = "BLOCKED_BUDGET"
+                elif not allowed:
+                    methodology["status"] = "BLOCKED_SCOPE"
+                    methodology["planning_note"] = reason
+
+                planned = PlannedTest(
+                    "test-" + uuid.uuid4().hex[:12],
+                    hypothesis.hypothesis_id,
+                    "xss-reflection-validation",
+                    hypothesis.endpoint,
+                    "GET",
+                    4,
+                    "SAFE_ACTIVE",
+                    True,
+                    plan_status,
+                    methodology=methodology,
+                )
+
+                ctx.test_plan.append(planned)
+
+                if plan_status == "PLANNED":
+                    ctx._xss_test_specs.append({
+                        **candidate,
+                        "test_id": planned.test_id,
+                    })
+                    reserved += 4
+
+        if getattr(ctx, "_privilege_escalation_test_specs", None):
+            for spec in ctx._privilege_escalation_test_specs[:3]:
+                enough = reserved + 3 <= available
+                allowed, reason = ctx.authorization.check(
+                    spec["url"], purpose="privilege-escalation-test-plan", method="GET"
+                )
+                plan_status = "PLANNED" if can_run and enough and allowed else "BLOCKED"
+                hypothesis = next(
+                    (h for h in ctx.hypotheses if h.hypothesis_id == spec["hypothesis_id"]),
+                    None,
+                )
+                if not hypothesis:
+                    continue
+
+                methodology = build_test_methodology(
+                    "privilege-escalation-validation", spec["url"]
+                )
+                methodology = attach_strategy(
+                    methodology,
+                    "privilege_escalation",
+                    surface="api",
+                    capabilities=("two researcher-supplied identities", "protected function"),
+                )
+
+                if not can_run:
+                    methodology["status"] = "BLOCKED_ACTIVE_MODE"
+                elif not enough:
+                    methodology["status"] = "BLOCKED_BUDGET"
+                elif not allowed:
+                    methodology["status"] = "BLOCKED_SCOPE"
+                    methodology["planning_note"] = reason
+
+                planned = PlannedTest(
+                    "test-" + uuid.uuid4().hex[:12],
+                    hypothesis.hypothesis_id,
+                    "privilege-escalation-validation",
+                    spec["url"],
+                    "GET",
+                    3,
+                    "LOW_READ_ONLY",
+                    True,
+                    plan_status,
+                    methodology=methodology,
+                )
+                ctx.test_plan.append(planned)
+
+                if plan_status == "PLANNED":
+                    spec["test_id"] = planned.test_id
+                    reserved += 3
+
+
+        if getattr(ctx, "_path_traversal_test_specs", None):
+            for spec in ctx._path_traversal_test_specs[:3]:
+                enough = reserved + 3 <= available
+                allowed, reason = ctx.authorization.check(
+                    spec["url"], purpose="path-traversal-test-plan", method="GET"
+                )
+                plan_status = "PLANNED" if can_run and enough and allowed else "BLOCKED"
+                hypothesis = next(
+                    (h for h in ctx.hypotheses if h.hypothesis_id == spec["hypothesis_id"]),
+                    None,
+                )
+                if not hypothesis:
+                    continue
+
+                methodology = build_test_methodology(
+                    "path-traversal-validation", spec["url"]
+                )
+                methodology = attach_strategy(
+                    methodology,
+                    "path_traversal",
+                    surface="api",
+                    capabilities=("observed file/path parameter", "known-safe file control"),
+                )
+
+                if not can_run:
+                    methodology["status"] = "BLOCKED_ACTIVE_MODE"
+                elif not enough:
+                    methodology["status"] = "BLOCKED_BUDGET"
+                elif not allowed:
+                    methodology["status"] = "BLOCKED_SCOPE"
+                    methodology["planning_note"] = reason
+
+                planned = PlannedTest(
+                    "test-" + uuid.uuid4().hex[:12],
+                    hypothesis.hypothesis_id,
+                    "path-traversal-validation",
+                    spec["url"],
+                    "GET",
+                    3,
+                    "LOW_READ_ONLY",
+                    True,
+                    plan_status,
+                    methodology=methodology,
+                )
+                ctx.test_plan.append(planned)
+
+                if plan_status == "PLANNED":
+                    spec["test_id"] = planned.test_id
+                    reserved += 3
+
+        if xss_hypotheses and not xss_selected:
+            ctx.emit(
+                "stage",
+                f"XSS hypotheses retained as review leads; no XSS checks selected by `{test_profile}` portfolio",
+            )
+
         if sql_hypotheses and not sqli_selected:
             ctx.emit("stage",f"SQL input leads retained as review hypotheses; no SQLi checks selected by `{test_profile}` portfolio")
         if sqli_selected and sql_hypotheses and not can_run:
@@ -1104,10 +1838,14 @@ class ControlledTestingStage(Stage):
             from .cors_verification import execute_cors_tests
             from .open_redirect_verification import execute_open_redirect_tests
             from .sql_injection_verification import execute_sql_injection_tests
+            from .xss_verification import execute_xss_tests
+            from .privilege_escalation_verification import execute_privilege_escalation_tests
             await execute_authorization_tests(ctx)
             await execute_cors_tests(ctx)
             await execute_open_redirect_tests(ctx)
             await execute_sql_injection_tests(ctx)
+            await execute_xss_tests(ctx)
+            await execute_privilege_escalation_tests(ctx)
             from .workflow_execution import execute_read_only_workflows
             from .browser_workflow import execute_browser_workflows
             await execute_read_only_workflows(ctx)
@@ -1123,10 +1861,12 @@ class VerificationStage(Stage):
         from .cors_verification import verify_cors_tests
         from .open_redirect_verification import verify_open_redirect_tests
         from .sql_injection_verification import verify_sql_injection_tests
+        from .xss_verification import verify_xss_tests
         verify_authorization_tests(ctx)
         verify_cors_tests(ctx)
         verify_open_redirect_tests(ctx)
         verify_sql_injection_tests(ctx)
+        verify_xss_tests(ctx)
         from .vulnerability_registry import build_vulnerability_matrix
         ctx.vulnerability_matrix=build_vulnerability_matrix(ctx,getattr(ctx.config,"test_profile","full"))
         ctx.emit("stage",f"Verification: {sum(1 for f in ctx.findings if f.status=='VERIFIED')} proof-backed verified finding(s)")

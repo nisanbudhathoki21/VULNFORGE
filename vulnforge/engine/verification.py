@@ -127,6 +127,17 @@ VERIFICATION_CONTRACTS: Dict[str, frozenset[str]] = {
             "impact",
         }
     ),
+    "privilege_escalation": frozenset(
+        {
+            "scope",
+            "baseline",
+            "identity_separation",
+            "protected_resource",
+            "differential",
+            "reproduction",
+            "role_separation",
+        }
+    ),
     "open_redirect": frozenset(
         {
             "scope",

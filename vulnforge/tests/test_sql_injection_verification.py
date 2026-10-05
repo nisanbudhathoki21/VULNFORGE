@@ -136,14 +136,14 @@ def test_sql_probe_exchange_bodies_and_query_values_are_never_persisted_with_pla
 def test_full_scan_validates_sqli_against_loopback_vulnerable_lab():
     from http.server import ThreadingHTTPServer
     from threading import Thread
-    from vulnforge.tests.lab_fixture import Handler as LabHandler
+    from labs.runtime import create_server
 
-    server=ThreadingHTTPServer(("127.0.0.1",0),LabHandler)
+    server=create_server("high", host="127.0.0.1", port=0, patched=False)
     server.daemon_threads=True
     thread=Thread(target=server.serve_forever,daemon=True); thread.start()
     base=f"http://127.0.0.1:{server.server_port}"
     try:
-        config=ScanConfig(target=base,profile_name="lab",test_profile="high",test_profile_explicit=True,
+        config=ScanConfig(target=base,profile_name="lab",test_profile="full",test_profile_explicit=True,
             active_requested=True,allowed_hosts=["127.0.0.1"],allowed_ports=[server.server_port],
             allow_private=True,authorization_confirmed=True,request_rate=20,request_budget=500)
         result=run_scan(config,_auth(base))
@@ -154,8 +154,8 @@ def test_full_scan_validates_sqli_against_loopback_vulnerable_lab():
     assert plans and all(plan.request_cost==6 for plan in plans)
     assert len(plans)<=3
     records=[test for test in ctx.tests if test.get("type")=="sql-injection-validation"]
-    assert records and any(test["reproduction_status"]=="CANDIDATE" for test in records)
-    assert all(test["status"] in {"CANDIDATE","INCOMPLETE"} for test in records)
+    assert records and any(test["reproduction_status"]=="REPRODUCED" for test in records)
+    assert any(test["status"]=="VERIFIED" for test in records)
     matrix=next(item for item in ctx.vulnerability_matrix if item["class_id"]=="sqli")
     assert matrix["supported"] and matrix["selected"]
-    assert not any(f.category=="SQL injection / error behavior" and f.status=="VERIFIED" for f in ctx.findings)
+    assert any(f.category=="sql-injection" and f.status=="VERIFIED" for f in ctx.findings)
