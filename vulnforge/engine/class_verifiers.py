@@ -362,10 +362,68 @@ def evaluate_extended_class(ctx, class_id: str) -> Dict[str, Any]:
         return _row("TESTED_CLEAN", f"Checked {surface} upload surface(s); unauthenticated upload was not permitted.", surface, 1)
 
     if class_id == "mass_assignment":
-        writable_priv = _params_by_name(ctx, _PRIV_PARAMS | {"owner", "owner_id", "user_id", "account_id", "verified", "balance"})
+        writable_priv = _params_by_name(
+            ctx,
+            _PRIV_PARAMS
+            | {
+                "owner",
+                "owner_id",
+                "user_id",
+                "account_id",
+                "verified",
+                "balance",
+            },
+        )
+
         if writable_priv:
-            return _row("OBSERVATION_ONLY", f"Observed {len(writable_priv)} ownership/privilege-related parameter(s) across discovered endpoints.", len(writable_priv), 1, reproduced=len(writable_priv))
-        return _row("TESTED_CLEAN", f"Checked {len(params)} parameter(s); no mass-assignable privilege/ownership fields exposed.", max(1, len(endpoints)), 1)
+            return _row(
+                "OBSERVATION_ONLY",
+                (
+                    f"Observed {len(writable_priv)} ownership/privilege-related "
+                    "parameter(s) across discovered endpoints; active "
+                    "mass-assignment verification is required."
+                ),
+                len(writable_priv),
+                1,
+                reproduced=len(writable_priv),
+            )
+
+        api_state_changing = [
+            ep
+            for ep in endpoints
+            if str(getattr(ep, "method", "GET")).upper()
+            in {"POST", "PUT", "PATCH"}
+            and getattr(ep, "scope_status", "") == "IN_SCOPE"
+            and (
+                "/api/" in str(getattr(ep, "url", "")).lower()
+                or "/rest/" in str(getattr(ep, "url", "")).lower()
+                or "json" in str(getattr(ep, "content_type", "")).lower()
+            )
+        ]
+
+        if api_state_changing:
+            return _row(
+                "ACTIVE_TEST_REQUIRED",
+                (
+                    f"Observed {len(api_state_changing)} in-scope "
+                    "state-changing API endpoint(s); parameter inventory "
+                    "alone cannot determine whether privileged properties "
+                    "are mass-assignable."
+                ),
+                len(api_state_changing),
+                1,
+            )
+
+        return _row(
+            "TESTED_CLEAN",
+            (
+                f"No eligible state-changing API surface was observed "
+                f"across {len(params)} parameter(s) and {len(endpoints)} "
+                "endpoint(s)."
+            ),
+            max(1, len(endpoints)),
+            1,
+        )
 
     if class_id == "sensitive_data_exposure":
         secret_signals = [s for s in js_findings if s.get("kind") in {"secret", "token", "api_key"}]

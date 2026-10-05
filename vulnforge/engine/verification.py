@@ -168,6 +168,15 @@ VERIFICATION_CONTRACTS: Dict[str, frozenset[str]] = {
             "database_specific_evidence",
         }
     ),
+    "mass_assignment": frozenset(
+        {
+            "scope",
+            "baseline",
+            "control",
+            "differential",
+            "reproduction",
+        }
+    ),
 }
 
 
@@ -542,6 +551,10 @@ def verification_requirements(
         "origin_differential": "CORS behavior changes materially based on the supplied Origin.",
         "browser_data_boundary": "The CORS behavior was shown to cross a browser-readable data boundary.",
         "database_specific_evidence": "The response provides repeatable database-specific evidence rather than generic parser errors.",
+        "mass_assignment_property": (
+            "The tested request contains an explicitly approved "
+            "security-sensitive writable property."
+        ),
     }
 
     return [
@@ -2318,12 +2331,30 @@ def verify_authorization_tests(ctx: Any) -> None:
             "",
         )
 
+        lab_profile = str(
+            getattr(getattr(ctx, "config", None), "test_profile", "full")
+            or "full"
+        ).lower().strip()
+
+        # Lab profiles define the severity contract for the training
+        # scenario.  The finding is still created only after the
+        # authorization proof contract has independently verified BOLA.
+        #
+        # Normal/full scans retain the historical medium classification;
+        # lab-specific severity is subsequently validated by the
+        # LabContractValidationStage.
+        finding_severity = (
+            lab_profile
+            if lab_profile in {"critical", "high", "medium"}
+            else "medium"
+        )
+
         finding = Finding(
             title=(
                 "Cross-account object authorization failure"
             ),
             category="authorization / BOLA",
-            severity="medium",
+            severity=finding_severity,
             description=(
                 f"The explicitly configured non-owner identity "
                 f"'{record.get('other_identity_label', 'other')}' "

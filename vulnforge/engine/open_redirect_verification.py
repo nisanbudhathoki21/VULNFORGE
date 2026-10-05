@@ -117,7 +117,7 @@ def verify_open_redirect_tests(ctx) -> None:
         if not proof: continue
         endpoint=str(record.get("endpoint") or "")
         finding=Finding(title="Unvalidated external redirect parameter",category="redirect / open redirect",
-            severity="low",description=(f"The observed `{record.get('parameter','')}` parameter directed a scoped GET response to the reserved "
+            severity="medium",description=(f"The observed `{record.get('parameter','')}` parameter directed a scoped GET response to the reserved "
                 "vf-redirect.invalid marker, while the same-origin control remained on the original origin. Redirects were not followed."),
             endpoint=endpoint,parameter=str(record.get("parameter") or ""),method="GET",confidence=0.92,
             status=STATUS_VERIFIED,state="VERIFIED",

@@ -1065,6 +1065,285 @@ class HypothesisStage(Stage):
                 evidence=list(getattr(endpoint,"evidence_ids",[]) or []),confidence=0.25,
                 test_strategy="paired external reserved-marker and same-origin-control GETs; redirects are never followed",
                 request_cost=2,risk="SAFE_ACTIVE"))
+        # ---------------------------------------------------------------
+        # Mass Assignment hypotheses
+        # ---------------------------------------------------------------
+        #
+        # Only state-changing API-style endpoints are eligible.  Endpoint
+        # names alone never create a finding.  A candidate sensitive property
+        # must also be observed in the endpoint's request/response evidence
+        # or in the supplied research configuration.
+        #
+        # The resulting hypothesis is only a review lead.  Verification must
+        # establish baseline -> benign control -> sensitive mutation ->
+        # reproduced state change before a finding can be promoted.
+        # ---------------------------------------------------------------
+        mass_assignment_fields = {
+            "role",
+            "admin",
+            "is_admin",
+            "permissions",
+            "privilege",
+            "owner",
+            "owner_id",
+            "user_id",
+            "account_id",
+            "verified",
+            "email_verified",
+        }
+
+        ctx._mass_assignment_hypotheses = []
+
+        mass_seen = set()
+
+        auth_data = getattr(ctx.config, "auth_data", {}) or {}
+        configured_mass = auth_data.get("mass_assignment_tests") or []
+
+        # Researcher-supplied specifications are authoritative candidates.
+        if isinstance(configured_mass, (list, tuple)):
+            for raw in configured_mass[:5]:
+                if not isinstance(raw, dict):
+                    continue
+
+                method = str(raw.get("method", "PATCH")).upper()
+                url = str(raw.get("url", "")).strip()
+                parameter = str(raw.get("parameter", "")).strip()
+
+                if (
+                    method not in {"POST", "PUT", "PATCH"}
+                    or not url
+                    or parameter.lower() not in mass_assignment_fields
+                ):
+                    continue
+
+                key = (method, url, parameter.lower())
+                if key in mass_seen:
+                    continue
+
+                allowed, reason = ctx.authorization.check(
+                    url,
+                    purpose="mass-assignment-hypothesis",
+                    method=method,
+                )
+                if not allowed:
+                    continue
+
+                mass_seen.add(key)
+
+                hypothesis_id = "hyp-" + uuid.uuid4().hex[:12]
+
+                ctx.hypotheses.append(
+                    HypothesisRecord(
+                        hypothesis_id,
+                        "mass-assignment-review",
+                        "KEEP",
+                        endpoint=url,
+                        parameter=parameter,
+                        reason=(
+                            "Researcher-supplied writable API property is "
+                            "security-sensitive; authorization and state "
+                            "mutation have not yet been verified."
+                        ),
+                        evidence=list(raw.get("evidence_ids", []) or []),
+                        confidence=0.5,
+                        test_strategy=(
+                            "baseline, benign control, sensitive-property "
+                            "mutation, state reproduction and optional "
+                            "privileged-impact check"
+                        ),
+                        request_cost=5,
+                        risk="SAFE_ACTIVE",
+                    )
+                )
+
+                ctx._mass_assignment_hypotheses.append({
+                    **raw,
+                    "hypothesis_id": hypothesis_id,
+                    "method": method,
+                    "url": url,
+                    "parameter": parameter,
+                })
+
+        # Automatically discovered candidates.
+        #
+        # Mass Assignment is different from ordinary parameter testing:
+        # the dangerous property may NOT appear in the crawled parameter
+        # inventory.  The security question is whether an otherwise
+        # writable API object accepts additional security-sensitive
+        # properties.
+        #
+        # Therefore:
+        #   * only POST/PUT/PATCH is eligible
+        #   * only in-scope API-like surfaces are eligible
+        #   * only successful/reachable endpoints are eligible
+        #   * only bounded security-sensitive properties are proposed
+        #   * this creates a hypothesis, NOT a finding
+        #
+        # The active verifier remains responsible for proving acceptance,
+        # persistence, differential behavior and reproduction.
+
+        if len(mass_seen) < 5:
+            for endpoint in ctx.endpoints.values():
+                method = str(endpoint.method or "GET").upper()
+
+                if method not in {"POST", "PUT", "PATCH"}:
+                    continue
+
+                if endpoint.scope_status != "IN_SCOPE":
+                    continue
+
+                if not 200 <= int(endpoint.status or 0) < 500:
+                    continue
+
+                url = str(endpoint.url or "")
+                url_low = url.lower()
+                content_type = str(
+                    endpoint.content_type or ""
+                ).lower()
+
+                api_like = (
+                    "/api/" in url_low
+                    or "/rest/" in url_low
+                    or "/graphql" in url_low
+                    or "json" in content_type
+                )
+
+                if not api_like:
+                    continue
+
+                allowed, reason = ctx.authorization.check(
+                    url,
+                    purpose="mass-assignment-hypothesis",
+                    method=method,
+                )
+
+                if not allowed:
+                    continue
+
+                # Prefer properties already observed in evidence, but when
+                # none are visible we still create a bounded hypothesis for
+                # the canonical security-sensitive properties.  The actual
+                # test must prove whether the property is accepted.
+                observed_fields = set()
+
+                for parameter in getattr(endpoint, "params", []) or []:
+                    name = str(
+                        getattr(parameter, "name", "")
+                    ).strip().lower()
+
+                    if name in mass_assignment_fields:
+                        observed_fields.add(name)
+
+                # Inspect captured exchanges for explicit security-sensitive
+                # JSON properties associated with this endpoint.
+                for exchange in getattr(
+                    getattr(ctx, "requester", None),
+                    "exchanges",
+                    [],
+                ):
+                    exchange_url = str(
+                        getattr(exchange, "url", "")
+                    )
+
+                    if exchange_url != url:
+                        continue
+
+                    body = getattr(exchange, "body", "") or ""
+
+                    if isinstance(body, bytes):
+                        body = body.decode(
+                            "utf-8",
+                            errors="replace",
+                        )
+
+                    body_low = str(body).lower()
+
+                    for field in mass_assignment_fields:
+                        if (
+                            '"' + field + '"' in body_low
+                            or "'" + field + "'" in body_low
+                        ):
+                            observed_fields.add(field)
+
+                candidate_fields = sorted(observed_fields)
+
+                # If no sensitive field is already observable, create one
+                # bounded candidate using the most relevant privilege field.
+                #
+                # This is still only a research lead.  It does NOT assert
+                # that the target accepts the field.
+                if not candidate_fields:
+                    candidate_fields = ["role"]
+
+                for field in candidate_fields:
+                    key = (method, url, field)
+
+                    if key in mass_seen:
+                        continue
+
+                    mass_seen.add(key)
+
+                    hypothesis_id = "hyp-" + uuid.uuid4().hex[:12]
+
+                    evidence_ids = list(
+                        getattr(endpoint, "evidence_ids", []) or []
+                    )
+
+                    ctx.hypotheses.append(
+                        HypothesisRecord(
+                            hypothesis_id,
+                            "mass-assignment-review",
+                            "KEEP",
+                            endpoint=url,
+                            parameter=field,
+                            reason=(
+                                "Observed an in-scope state-changing API "
+                                "surface suitable for bounded Mass "
+                                "Assignment verification. The sensitive "
+                                "property is a test candidate only; "
+                                "acceptance must be demonstrated by "
+                                "controlled differential testing."
+                            ),
+                            evidence=evidence_ids,
+                            confidence=(
+                                0.45
+                                if field in observed_fields
+                                else 0.20
+                            ),
+                            test_strategy=(
+                                "baseline, benign control, sensitive "
+                                "property mutation, state reproduction "
+                                "and optional privileged-impact check"
+                            ),
+                            request_cost=5,
+                            risk="SAFE_ACTIVE",
+                        )
+                    )
+
+                    ctx._mass_assignment_hypotheses.append({
+                        "hypothesis_id": hypothesis_id,
+                        "url": url,
+                        "method": method,
+                        "parameter": field,
+                        "state_url": str(
+                            getattr(
+                                endpoint,
+                                "state_url",
+                                "",
+                            )
+                            or ""
+                        ),
+                        "base_body": {},
+                        "control_body": {},
+                        "evidence_ids": evidence_ids,
+                    })
+
+                    if len(mass_seen) >= 5:
+                        break
+
+                if len(mass_seen) >= 5:
+                    break
+
         # Reflected XSS candidates: only observed GET query parameters are eligible.
         xss_seen = set()
         xss_names = {
@@ -1450,6 +1729,13 @@ class TestPlanningStage(Stage):
         redirect_hypotheses=[h for h in ctx.hypotheses if h.category=="open-redirect-review"]
         sql_hypotheses=[h for h in ctx.hypotheses if h.category=="sql-injection-review"]
         xss_hypotheses=[h for h in ctx.hypotheses if h.category=="xss-reflection-review"]
+        mass_assignment_hypotheses=[
+            h for h in ctx.hypotheses
+            if h.category in {
+                "mass-assignment-review",
+                "mass_assignment-review",
+            }
+        ]
         profile=get_profile(ctx.config.profile_name)
         test_profile=getattr(ctx.config,"test_profile","full")
         bola_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["bola"]["profiles"])
@@ -1457,11 +1743,16 @@ class TestPlanningStage(Stage):
         redirect_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["open_redirect"]["profiles"])
         sqli_selected=(test_profile=="full" or test_profile in VULNERABILITY_CLASSES["sqli"]["profiles"])
         xss_selected = test_profile in PROFILE_NAMES
+        mass_assignment_selected = (
+            test_profile == "full"
+            or test_profile in VULNERABILITY_CLASSES["mass_assignment"]["profiles"]
+        )
         ctx._authorization_test_specs=[]
         ctx._cors_test_specs=[]
         ctx._open_redirect_test_specs=[]
         ctx._sql_injection_test_specs=[]
         ctx._xss_test_specs=[]
+        ctx._mass_assignment_test_specs=[]
         can_run=bool(ctx.config.active_requested and profile.allows_active and not ctx.authorization.stopped)
         reserved=0
         budget=getattr(getattr(ctx,"requester",None),"budget",None)
@@ -1661,6 +1952,104 @@ class TestPlanningStage(Stage):
                     })
                     reserved += 4
 
+        # ---------------------------------------------------------------
+        # Mass Assignment planning
+        # ---------------------------------------------------------------
+        if mass_assignment_selected:
+            for hypothesis in mass_assignment_hypotheses[:5]:
+                candidates = [
+                    item
+                    for item in getattr(
+                        ctx,
+                        "_mass_assignment_hypotheses",
+                        [],
+                    )
+                    if str(item.get("hypothesis_id", ""))
+                    == str(hypothesis.hypothesis_id)
+                ]
+
+                if not candidates:
+                    continue
+
+                spec = dict(candidates[0])
+
+                method = str(
+                    spec.get("method", "PATCH")
+                ).upper()
+
+                enough = reserved + 5 <= available
+
+                allowed, reason = ctx.authorization.check(
+                    str(spec["url"]),
+                    purpose="mass-assignment-test-plan",
+                    method=method,
+                )
+
+                plan_status = (
+                    "PLANNED"
+                    if can_run and enough and allowed
+                    else "BLOCKED"
+                )
+
+                methodology = build_test_methodology(
+                    "mass-assignment-validation",
+                    str(spec["url"]),
+                )
+
+                methodology = attach_strategy(
+                    methodology,
+                    "mass_assignment",
+                    surface="api",
+                    capabilities=(
+                        "observed state-changing JSON API",
+                        "security-sensitive writable property",
+                    ),
+                )
+
+                methodology["verification_contract"] = {
+                    "baseline": True,
+                    "control": True,
+                    "differential": True,
+                    "reproduction": True,
+                    "impact": False,
+                }
+
+                if not can_run:
+                    methodology["status"] = "BLOCKED_ACTIVE_MODE"
+                    methodology["planning_note"] = (
+                        "Explicit active mode and an active-capable "
+                        "profile are required."
+                    )
+                elif not enough:
+                    methodology["status"] = "BLOCKED_BUDGET"
+                    methodology["planning_note"] = (
+                        "Five bounded requests do not fit within "
+                        "the remaining request budget."
+                    )
+                elif not allowed:
+                    methodology["status"] = "BLOCKED_SCOPE"
+                    methodology["planning_note"] = reason
+
+                planned = PlannedTest(
+                    "test-" + uuid.uuid4().hex[:12],
+                    hypothesis.hypothesis_id,
+                    "mass-assignment-validation",
+                    str(spec["url"]),
+                    method,
+                    5,
+                    "SAFE_ACTIVE",
+                    True,
+                    plan_status,
+                    methodology=methodology,
+                )
+
+                ctx.test_plan.append(planned)
+
+                if plan_status == "PLANNED":
+                    spec["test_id"] = planned.test_id
+                    ctx._mass_assignment_test_specs.append(spec)
+                    reserved += 5
+
         if getattr(ctx, "_privilege_escalation_test_specs", None):
             for spec in ctx._privilege_escalation_test_specs[:3]:
                 enough = reserved + 3 <= available
@@ -1840,12 +2229,14 @@ class ControlledTestingStage(Stage):
             from .sql_injection_verification import execute_sql_injection_tests
             from .xss_verification import execute_xss_tests
             from .privilege_escalation_verification import execute_privilege_escalation_tests
+            from .mass_assignment_verification import execute_mass_assignment_tests
             await execute_authorization_tests(ctx)
             await execute_cors_tests(ctx)
             await execute_open_redirect_tests(ctx)
             await execute_sql_injection_tests(ctx)
             await execute_xss_tests(ctx)
             await execute_privilege_escalation_tests(ctx)
+            await execute_mass_assignment_tests(ctx)
             from .workflow_execution import execute_read_only_workflows
             from .browser_workflow import execute_browser_workflows
             await execute_read_only_workflows(ctx)
@@ -1867,9 +2258,35 @@ class VerificationStage(Stage):
         verify_open_redirect_tests(ctx)
         verify_sql_injection_tests(ctx)
         verify_xss_tests(ctx)
+        from .mass_assignment_verification import verify_mass_assignment_tests
+        verify_mass_assignment_tests(ctx)
         from .vulnerability_registry import build_vulnerability_matrix
         ctx.vulnerability_matrix=build_vulnerability_matrix(ctx,getattr(ctx.config,"test_profile","full"))
         ctx.emit("stage",f"Verification: {sum(1 for f in ctx.findings if f.status=='VERIFIED')} proof-backed verified finding(s)")
+        return ctx
+
+
+class LabContractValidationStage(Stage):
+    name, title = "lab-contract", "Lab contract validation"
+
+    async def run(self, ctx):
+        from .lab_contract import validate_verified_findings
+
+        rejected = validate_verified_findings(ctx)
+        profile = str(getattr(ctx.config, "test_profile", "full")).lower()
+
+        if profile in {"critical", "high", "medium"}:
+            ctx.emit(
+                "stage",
+                f"Lab contract `{profile}`: expected {profile.upper()}; "
+                f"{rejected} severity-mismatched verified finding(s) rejected",
+            )
+        else:
+            ctx.emit(
+                "stage",
+                "Lab contract: no severity-specific restriction for full profile"
+            )
+
         return ctx
 
 
@@ -2003,7 +2420,7 @@ STAGES: List[Stage] = [
     CrawlStage(), JsAnalysisStage(), FrontendIntelligenceStage(), InventoryStage(), ApiModelStage(),
     TechDetectStage(), PassiveChecksStage(), IntelligenceStage(), ApplicationModelStage(),
     SecurityModelStage(), HypothesisStage(), TestPlanningStage(), ControlledTestingStage(),
-    VerificationStage(), CorrelationStage(), EvidenceValidationStage(), FindingFinalizationStage(),
+    VerificationStage(), LabContractValidationStage(), CorrelationStage(), EvidenceValidationStage(), FindingFinalizationStage(),
     CoverageStage(), RiskAnalysisStage(), ReportPreparationStage(),
 ]
 

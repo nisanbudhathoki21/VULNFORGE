@@ -781,10 +781,18 @@ def api_order(order_id):
     # the security-testing target for the critical lab.
     # --------------------------------------------------------
 
-    return jsonify({
+    response = jsonify({
         "order_id": order_id,
         **order,
     })
+
+    # Lab-only identity assertion used by VULNFORGE's
+    # authorization verification contract.
+    # This exposes the authenticated requester, not the
+    # object's owner, so the BOLA boundary remains testable.
+    response.headers["X-Lab-Principal"] = str(user)
+
+    return response
 
 
 # ============================================================
